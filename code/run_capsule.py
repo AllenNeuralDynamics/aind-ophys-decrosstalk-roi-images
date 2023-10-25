@@ -29,7 +29,7 @@ def decrosstalk_fov(oeid, paired_oeid, input_dir, output_dir):
         print(f"Could not pull pixel size from platform json, {platform_json_fp}. Using default value of 0.78um/pixel")
     paired_reg_fn = list(input_dir.glob(f"{paired_oeid}_paired_registered.h5"))[0]
     decrosstalk_data, alpha_list, beta_list, mean_norm_mi_list = dri.decrosstalk_movie_roi_image(
-        oeid, paired_oeid, input_dir, pixel_size_um
+        oeid, paired_reg_fn, input_dir, pixel_size_um
     )
     dc_fov_dir = output_dir / 'decrosstalk_roi_images'
     if not dc_fov_dir.exists():
