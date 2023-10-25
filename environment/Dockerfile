@@ -1,4 +1,4 @@
-# hash:sha256:2561504d4b8d7677df7166ad92ed5673509f31f5bf5883984a31cd3c9f0026ef
+# hash:sha256:1e4377a5b6ce01f4d251c97ab27b7675df269e4baa2a88120296333fe39c67cf
 FROM registry.codeocean.allenneuraldynamics.org/codeocean/jupyterlab:3.0.9-miniconda4.9.2-python3.8-ubuntu20.04
 
 ARG DEBIAN_FRONTEND=noninteractive
@@ -13,6 +13,7 @@ RUN apt-get update \
     && rm -rf /var/lib/apt/lists/*
 
 RUN pip install -U --no-cache-dir \
+    cellpose \
     h5py==3.10.0 \
     matplotlib==3.7.3 \
     numpy==1.24.4 \
