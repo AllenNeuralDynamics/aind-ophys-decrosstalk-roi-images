@@ -113,7 +113,7 @@ def decrosstalk_movie_roi_image(oeid, paired_reg_fn, input_dir, pixel_size=0.78,
     beta_list = []
     mean_norm_mi_list = []
     for start_frame in start_frames:        
-        alpha, beta, mean_norm_mi_values = decrosstalk_roi_image_single_pair(oeid, paired_reg_fn, input_dir,        pixel_size,
+        alpha, beta, mean_norm_mi_values = decrosstalk_roi_image_single_pair(oeid, paired_reg_fn, input_dir,pixel_size,
                                                                              start_frame=start_frame,
                                                                              num_frames_avg=num_frames_avg,
                                                                              grid_interval=grid_interval,
