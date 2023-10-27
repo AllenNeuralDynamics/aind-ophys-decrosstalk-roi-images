@@ -8,7 +8,7 @@ import shutil
 import numpy as np
 
 
-def decrosstalk_fov(oeid, paired_oeid, input_dir, output_dir):
+def decrosstalk_roim(oeid, paired_oeid, input_dir, output_dir):
     logging.info(f"Input directory, {input_dir}")
     logging.info(f"Output directory, {output_dir}")
     logging.info(f"Ophys experiment ID pairs, {oeid}, {paired_oeid}")
@@ -27,22 +27,11 @@ def decrosstalk_fov(oeid, paired_oeid, input_dir, output_dir):
         ]
     except KeyError:
         print(f"Could not pull pixel size from platform json, {platform_json_fp}. Using default value of 0.78um/pixel")
+        pixel_size_um = 0.78
     paired_reg_fn = list(input_dir.glob(f"{paired_oeid}_paired_registered.h5"))[0]
-    decrosstalk_data, alpha_list, beta_list, mean_norm_mi_list = dri.decrosstalk_movie_roi_image(
-        oeid, paired_reg_fn, input_dir, pixel_size_um
-    )
-    dc_fov_dir = output_dir / 'decrosstalk_roi_images'
-    if not dc_fov_dir.exists():
-        dc_fov_dir.mkdir()
-    decrosstalk_fn = dc_fov_dir / f'{oeid}_decrosstalk.h5'
-    with h5.File(decrosstalk_fn, 'w') as f:
-        f.create_dataset('data', data=decrosstalk_data)
-        f.create_dataset('alpha_list', data=alpha_list)
-        f.create_dataset('beta_list', data=beta_list)
-        f.create_dataset('mean_norm_mi_list', data=mean_norm_mi_list)
-
+    
     ## Just to get alpha and beta for the experiment:
-    _, alpha_list, beta_list, mean_norm_mi_list = dri.decrosstalk_movie_roi_image(oeid, paired_reg_fn,input_dir, return_recon=False)
+    _, alpha_list, beta_list, mean_norm_mi_list = dri.decrosstalk_movie_roi_image(oeid, paired_reg_fn, input_dir, pixel_size = pixel_size_um, return_recon=False) # TODO: Pull pixel size out of decrosstalk_movie_roi_image
     alpha = np.mean(alpha_list)
     beta = np.mean(beta_list)
 
@@ -56,10 +45,7 @@ def decrosstalk_fov(oeid, paired_oeid, input_dir, output_dir):
     start_frames = np.arange(0, data_length, chunk_size)
     end_frames = np.append(start_frames[1:], data_length)
 
-    dc_fov_dir = output_dir / 'decrosstalk_roi_images'
-    if not dc_fov_dir.exists():
-        dc_fov_dir.mkdir()
-    decrosstalk_fn = dc_fov_dir / f'{oeid}_decrosstalk.h5'
+    decrosstalk_fn = output_dir / f'{oeid}_decrosstalk.h5'
 
     i = 0
     for start_frame, end_frame in zip(start_frames, end_frames):
@@ -91,8 +77,8 @@ def run():
     for i in paired_directories:
         oeid1, oeid2 = str(i.name).split("_")[0], str(i.name).split("_")[-1]
         logging.info(f"Processing pairs, Pair_1, {oeid1}, Pair_2, {oeid2}")
-        decrosstalk_fov(oeid1, oeid2, i, output_dir)
-        decrosstalk_fov(oeid2, oeid1, i, output_dir)
+        decrosstalk_roim(oeid1, oeid2, i, output_dir)
+        decrosstalk_roim(oeid2, oeid1, i, output_dir)
 
 
 if __name__ == "__main__":
