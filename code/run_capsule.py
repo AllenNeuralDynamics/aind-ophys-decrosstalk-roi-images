@@ -42,7 +42,7 @@ def decrosstalk_fov(oeid, paired_oeid, input_dir, output_dir):
         f.create_dataset('mean_norm_mi_list', data=mean_norm_mi_list)
 
     ## Just to get alpha and beta for the experiment:
-    _, alpha_list, beta_list, mean_norm_mi_list = dri.decrosstalk_movie_roi_image(oeid, paired_reg_fn,input_dir return_recon=False)
+    _, alpha_list, beta_list, mean_norm_mi_list = dri.decrosstalk_movie_roi_image(oeid, paired_reg_fn,input_dir, return_recon=False)
     alpha = np.mean(alpha_list)
     beta = np.mean(beta_list)
 
