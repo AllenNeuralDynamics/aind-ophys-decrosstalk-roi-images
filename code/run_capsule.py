@@ -18,56 +18,56 @@ def decrosstalk_roim(oeid, paired_oeid, input_dir, output_dir):
     oeid_mt = input_dir / f"{oeid}_motion_transform.csv"
     shutil.copy(oeid_mt, output_dir)
     shutil.copy(oeid_pj, output_dir / "processing.json")
-    platform_json_fp = list(input_dir.glob("*platform.json"))[0]
-    with open(platform_json_fp, "r") as f:
-        platform_json = json.load(f)
-    try:
-        pixel_size_um = platform_json["imaging_plane_groups"][0]["imaging_planes"][0]["registration"][
-        "pixel_size_um"
-        ]
-    except KeyError:
-        print(f"Could not pull pixel size from platform json, {platform_json_fp}. Using default value of 0.78um/pixel")
-        pixel_size_um = 0.78
-    paired_reg_fn = list(input_dir.glob(f"{paired_oeid}_paired_registered.h5"))[0]
-    
+    paired_reg_fn = list(input_dir.glob(f"{paired_oeid}_paired_reg_mean_episodic_fov.h5"))[0]
+
     ## Just to get alpha and beta for the experiment:
-    _, alpha_list, beta_list, mean_norm_mi_list = dri.decrosstalk_movie_roi_image(oeid, paired_reg_fn, input_dir, pixel_size = pixel_size_um, return_recon=False) # TODO: Pull pixel size out of decrosstalk_movie_roi_image
+    _, alpha_list, beta_list, mean_norm_mi_list = dri.decrosstalk_movie_roi_image(
+        oeid, paired_reg_fn, input_dir, return_recon=False
+    )  # TODO: Pull pixel size out of decrosstalk_movie_roi_image
     alpha = np.mean(alpha_list)
     beta = np.mean(beta_list)
 
     ## To reduce RAM usage, you can get/save the decrosstalk_data in chunks:
-    chunk_size = 5000 # num of frames in each chunk
+    chunk_size = 5000  # num of frames in each chunk
 
-    with h5.File(input_dir / f"{oeid}_registered.h5", 'r') as f:
-        data_shape = f['data'].shape
+    with h5.File(input_dir / f"{oeid}_registered.h5", "r") as f:
+        data_shape = f["data"].shape
     data_length = data_shape[0]
-    num_chunks = int(np.ceil(data_length / chunk_size))
     start_frames = np.arange(0, data_length, chunk_size)
     end_frames = np.append(start_frames[1:], data_length)
 
-    decrosstalk_fn = output_dir / f'{oeid}_decrosstalk.h5'
+    decrosstalk_fn = output_dir / f"{oeid}_decrosstalk.h5"
 
     i = 0
     for start_frame, end_frame in zip(start_frames, end_frames):
-        with h5.File(input_dir / f"{oeid}_registered.h5", 'r') as f:
-            signal_data = f['data'][start_frame:end_frame]
-        with h5.File(paired_reg_fn, 'r') as f:
-            paired_data = f['data'][start_frame:end_frame]
+        with h5.File(input_dir / f"{oeid}_registered.h5", "r") as f:
+            signal_data = f["data"][start_frame:end_frame]
+        with h5.File(paired_reg_fn, "r") as f:
+            paired_data = f["data"][start_frame:end_frame]
         recon_signal_data = np.zeros_like(signal_data)
         for j in range(signal_data.shape[0]):
-            recon_signal_data[j, :, :] = dri.apply_mixing_matrix(alpha, beta, signal_data[j, :, :], paired_data[j, :, :])[0]
+            recon_signal_data[j, :, :] = dri.apply_mixing_matrix(
+                alpha, beta, signal_data[j, :, :], paired_data[j, :, :]
+            )[0]
 
         if i == 0:
-            with h5.File(decrosstalk_fn, 'w') as f:
-                f.create_dataset('data', data=recon_signal_data, maxshape=(None, data_shape[1], data_shape[2]))
-                f.create_dataset('alpha_list', data=alpha_list)
-                f.create_dataset('beta_list', data=beta_list)
-                f.create_dataset('mean_norm_mi_list', data=mean_norm_mi_list)
+            with h5.File(decrosstalk_fn, "w") as f:
+                f.create_dataset(
+                    "data",
+                    data=recon_signal_data,
+                    maxshape=(None, data_shape[1], data_shape[2]),
+                )
+                f.create_dataset("alpha_list", data=alpha_list)
+                f.create_dataset("beta_list", data=beta_list)
+                f.create_dataset("mean_norm_mi_list", data=mean_norm_mi_list)
         else:
-            with h5.File(decrosstalk_fn, 'a') as f:
-                f['data'].resize((f['data'].shape[0] + recon_signal_data.shape[0]), axis=0)
-                f['data'][start_frame:end_frame] = recon_signal_data
+            with h5.File(decrosstalk_fn, "a") as f:
+                f["data"].resize(
+                    (f["data"].shape[0] + recon_signal_data.shape[0]), axis=0
+                )
+                f["data"][start_frame:end_frame] = recon_signal_data
         i += 1
+
 
 def run():
     """basic run function"""
