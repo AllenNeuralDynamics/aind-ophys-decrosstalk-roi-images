@@ -111,7 +111,7 @@ def decrosstalk_movie_roi_image(
     """
 
     # Assign start frames for each epoch
-    signal_fn = input_dir / f"{oeid}_registered.h5"
+    signal_fn = input_dir / f"{oeid}_registered_mean_fov.h5"
     with h5py.File(signal_fn, "r") as f:
         data_length = f["data"].shape[0]
     num_epochs = min(max_num_epochs, data_length // num_frames_avg)
@@ -205,7 +205,7 @@ def decrosstalk_roi_image_single_pair(
     mean_norm_mi_values : np.array
         mean normalized mutual information values
     """
-    signal_fn = input_dir / f"{oeid}_registered.h5"
+    signal_fn = input_dir / f"{oeid}_registered_mean_fov.h5"
     with h5py.File(signal_fn, "r") as f:
         signal_mean = f["data"][start_frame : start_frame + num_frames_avg].mean(axis=0)
     with h5py.File(paired_reg_fn, "r") as f:
