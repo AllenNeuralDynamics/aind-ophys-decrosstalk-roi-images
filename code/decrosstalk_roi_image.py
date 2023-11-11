@@ -114,7 +114,7 @@ def decrosstalk_movie_roi_image(
     signal_fn = input_dir / f"{oeid}_registered_mean_fov.h5"
     with h5py.File(signal_fn, "r") as f:
         data_length = f["data"].shape[0]
-    start_frames = range(data_length.shape[0])
+    start_frames = range(data_length)
     assert len(start_frames) == max_num_epochs
 
     alpha_list = []
