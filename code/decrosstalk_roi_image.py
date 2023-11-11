@@ -120,6 +120,7 @@ def decrosstalk_movie_roi_image(
     )  # +1 to avoid the very first frame (about half of each epoch)
     num_frames = min(num_frames_avg, epoch_interval)
     start_frames = [num_frames // 2 + i * epoch_interval for i in range(num_epochs)]
+    import pdb;pdb.set_trace()
     assert start_frames[-1] + num_frames < data_length
 
     alpha_list = []
