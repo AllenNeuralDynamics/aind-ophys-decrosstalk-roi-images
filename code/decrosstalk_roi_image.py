@@ -114,14 +114,8 @@ def decrosstalk_movie_roi_image(
     signal_fn = input_dir / f"{oeid}_registered_mean_fov.h5"
     with h5py.File(signal_fn, "r") as f:
         data_length = f["data"].shape[0]
-    num_epochs = min(max_num_epochs, data_length // num_frames_avg)
-    epoch_interval = data_length // (
-        num_epochs + 1
-    )  # +1 to avoid the very first frame (about half of each epoch)
-    num_frames = min(num_frames_avg, epoch_interval)
-    start_frames = [num_frames // 2 + i * epoch_interval for i in range(num_epochs)]
-    import pdb;pdb.set_trace()
-    assert start_frames[-1] + num_frames < data_length
+    start_frames = range(data_length.shape[0])
+    assert len(start_frames) == max_num_epochs
 
     alpha_list = []
     beta_list = []
