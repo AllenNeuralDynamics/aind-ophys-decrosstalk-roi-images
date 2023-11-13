@@ -71,7 +71,7 @@ def decrosstalk_movie_roi_image(
     num_frames_avg=1000,
     grid_interval=0.01,
     max_grid_val=0.3,
-    return_recon=True,
+    return_recon=False,
 ):
     """Get alpha and beta values for an experiment based on
     the mutual information of the ROI images

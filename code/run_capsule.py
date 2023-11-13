@@ -22,8 +22,8 @@ def decrosstalk_roim(oeid, paired_oeid, input_dir, output_dir):
 
     ## Just to get alpha and beta for the experiment:
     _, alpha_list, beta_list, mean_norm_mi_list = dri.decrosstalk_movie_roi_image(
-        oeid, paired_reg_fn, input_dir, return_recon=False
-    )  # TODO: Pull pixel size out of decrosstalk_movie_roi_image
+        oeid, paired_reg_fn, input_dir
+    )
     alpha = np.mean(alpha_list)
     beta = np.mean(beta_list)
 
@@ -62,9 +62,7 @@ def decrosstalk_roim(oeid, paired_oeid, input_dir, output_dir):
                 f.create_dataset("mean_norm_mi_list", data=mean_norm_mi_list)
         else:
             with h5.File(decrosstalk_fn, "a") as f:
-                f["data"].resize(
-                    (f["data"].shape[0] + recon_signal_data.shape[0]), axis=0
-                )
+                f["data"].resize((f["data"].shape[0] + recon_signal_data.shape[0]), axis=0)
                 f["data"][start_frame:end_frame] = recon_signal_data
         i += 1
 
