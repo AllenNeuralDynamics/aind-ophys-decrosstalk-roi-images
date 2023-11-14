@@ -30,7 +30,7 @@ def decrosstalk_roim(oeid, paired_oeid, input_dir, output_dir):
     ## To reduce RAM usage, you can get/save the decrosstalk_data in chunks:
     chunk_size = 5000  # num of frames in each chunk
 
-    with h5.File(input_dir / f"{oeid}_registered_mean_fov.h5", "r") as f:
+    with h5.File(input_dir / f"{oeid}_registered.h5", "r") as f:
         data_shape = f["data"].shape
     data_length = data_shape[0]
     start_frames = np.arange(0, data_length, chunk_size)
@@ -40,7 +40,7 @@ def decrosstalk_roim(oeid, paired_oeid, input_dir, output_dir):
 
     i = 0
     for start_frame, end_frame in zip(start_frames, end_frames):
-        with h5.File(input_dir / f"{oeid}_registered_mean_fov.h5", "r") as f:
+        with h5.File(input_dir / f"{oeid}_registered.h5", "r") as f:
             signal_data = f["data"][start_frame:end_frame]
         with h5.File(paired_reg_fn, "r") as f:
             paired_data = f["data"][start_frame:end_frame]
