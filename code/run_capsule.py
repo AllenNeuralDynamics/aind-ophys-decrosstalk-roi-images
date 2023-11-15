@@ -39,17 +39,16 @@ def decrosstalk_roim(oeid, paired_oeid, input_dir, output_dir):
     decrosstalk_fn = output_dir / f"{oeid}_decrosstalk.h5"
 
     i = 0
+    with h5.File(paired_reg_fn, "r") as f:
+        paired_data = f["data"][()]
     for start_frame, end_frame in zip(start_frames, end_frames):
         with h5.File(input_dir / f"{oeid}_registered.h5", "r") as f:
             signal_data = f["data"][start_frame:end_frame]
-        with h5.File(paired_reg_fn, "r") as f:
-            paired_data = f["data"][start_frame:end_frame]
         recon_signal_data = np.zeros_like(signal_data)
         for j in range(signal_data.shape[0]):
             recon_signal_data[j, :, :] = dri.apply_mixing_matrix(
-                alpha, beta, signal_data[j, :, :], paired_data[j, :, :]
+                alpha, beta, signal_data[j, :, :], paired_data[i, :, :]
             )[0]
-
         if i == 0:
             with h5.File(decrosstalk_fn, "w") as f:
                 f.create_dataset(

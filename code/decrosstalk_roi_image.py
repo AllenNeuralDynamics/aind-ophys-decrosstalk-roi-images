@@ -118,7 +118,6 @@ def decrosstalk_roi_image_from_episodic_mean_fov(
             paired_reg_fn,
             input_dir,
             pixel_size,
-            start_frame=start_frame,
             grid_interval=grid_interval,
             max_grid_val=max_grid_val,
         )
