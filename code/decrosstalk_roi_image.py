@@ -62,19 +62,17 @@ def get_motion_correction_crop_xy_range(oeid, input_dir):
     return range_y, range_x
 
 
-def decrosstalk_movie_roi_image(
+def decrosstalk_roi_image_from_episodic_mean_fov(
     oeid,
     paired_reg_fn,
     input_dir,
     pixel_size=0.78,
-    max_num_epochs=10,
-    num_frames_avg=1000,
     grid_interval=0.01,
     max_grid_val=0.3,
     return_recon=False,
 ):
     """Get alpha and beta values for an experiment based on
-    the mutual information of the ROI images
+    the mutual information of the ROI images from motion corrected episodic mean FOV images
 
     Parameters:
     -----------
@@ -88,11 +86,6 @@ def decrosstalk_movie_roi_image(
         path to the input directory
     pixel_size: float, optional
         pixel size in um of imaging plane, (400pixelsx400pixels 512umx512um)
-    max_num_epochs : int, optional
-        Maximum number of epochs to calculate the alpha and beta values, by default 10
-        For shorter experiments, this number will be modified
-    num_frames_avg : int, optional
-        number of frames to average, by default 1000
     grid_interval : float, optional
         interval of the grid, by default 0.01
     max_grid_val : float, optional
@@ -111,14 +104,10 @@ def decrosstalk_movie_roi_image(
     """
 
     # Assign start frames for each epoch
-    signal_fn = input_dir / f"{oeid}_registered.h5"
-    with h5py.File(signal_fn, 'r') as f:
-        data_length = f['data'].shape[0]
-    num_epochs = min(max_num_epochs, data_length // num_frames_avg)
-    epoch_interval = data_length // (num_epochs+1)  # +1 to avoid the very first frame (about half of each epoch)
-    num_frames = min(num_frames_avg, epoch_interval)
-    start_frames = [num_frames//2 + i * epoch_interval for i in range(num_epochs)]
-    assert start_frames[-1] + num_frames < data_length
+    signal_fn = input_dir / f"{oeid}_registered_mean_fov.h5"
+    with h5py.File(signal_fn, "r") as f:
+        data_length = f["data"].shape[0]
+    start_frames = range(data_length)
 
     alpha_list = []
     beta_list = []
@@ -130,7 +119,6 @@ def decrosstalk_movie_roi_image(
             input_dir,
             pixel_size,
             start_frame=start_frame,
-            num_frames_avg=num_frames_avg,
             grid_interval=grid_interval,
             max_grid_val=max_grid_val,
         )
@@ -156,13 +144,11 @@ def decrosstalk_movie_roi_image(
     return recon_signal_data, alpha_list, beta_list, mean_norm_mi_list
 
 
-def decrosstalk_roi_image_single_pair(
+def decrosstalk_roi_image_single_pair_from_episodic_mean_fov(
     oeid,
     paired_reg_fn,
     input_dir,
     pix_size,
-    start_frame=1000,
-    num_frames_avg=1000,
     motion_buffer=5,
     grid_interval=0.01,
     max_grid_val=0.3,
@@ -182,10 +168,6 @@ def decrosstalk_roi_image_single_pair(
         path to the input directory
     pix_size = float
         pixel size in um of imaging plane
-    start_frame : int, optional
-        starting frame of the mean image, by default 1000
-    num_frames_avg : int, optional
-        number of frames to average, by default 1000
     motion_buffer : int, optional
         number of pixels to crop from the nonrigid motion corrected image, by default 5
         TODO: Get this from the suite2p parameters
@@ -203,11 +185,12 @@ def decrosstalk_roi_image_single_pair(
     mean_norm_mi_values : np.array
         mean normalized mutual information values
     """
-    signal_fn = input_dir / f"{oeid}_registered.h5"
+    signal_fn = input_dir / f"{oeid}_registered_mean_fov.h5"
+    start_frame = 1
     with h5py.File(signal_fn, "r") as f:
-        signal_mean = f["data"][start_frame : start_frame + num_frames_avg].mean(axis=0)
+        signal_mean = f["data"][start_frame : start_frame + 1].mean(axis=0)
     with h5py.File(paired_reg_fn, "r") as f:
-        paired_mean = f["data"][start_frame : start_frame + num_frames_avg].mean(axis=0)
+        paired_mean = f["data"][start_frame : start_frame + 1].mean(axis=0)
 
     paired_id = paired_reg_fn.name.split("_")[0]
     p1y, p1x = get_motion_correction_crop_xy_range_from_both_planes(oeid, paired_id, input_dir)
