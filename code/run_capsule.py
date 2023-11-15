@@ -21,7 +21,7 @@ def decrosstalk_roim(oeid, paired_oeid, input_dir, output_dir):
     paired_reg_fn = list(input_dir.glob(f"{paired_oeid}_paired_reg_mean_episodic_fov.h5"))[0]
 
     ## Just to get alpha and beta for the experiment:
-    _, alpha_list, beta_list, mean_norm_mi_list = dri.decrosstalk_movie_roi_image(
+    _, alpha_list, beta_list, mean_norm_mi_list = dri.decrosstalk_roi_image_from_episodic_mean_fov(
         oeid, paired_reg_fn, input_dir
     )
     alpha = np.mean(alpha_list)

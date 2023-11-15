@@ -113,7 +113,7 @@ def decrosstalk_roi_image_from_episodic_mean_fov(
     beta_list = []
     mean_norm_mi_list = []
     for start_frame in start_frames:
-        alpha, beta, mean_norm_mi_values = decrosstalk_roi_image_single_pair(
+        alpha, beta, mean_norm_mi_values = decrosstalk_roi_image_single_pair_from_episodic_mean_fov(
             oeid,
             paired_reg_fn,
             input_dir,
