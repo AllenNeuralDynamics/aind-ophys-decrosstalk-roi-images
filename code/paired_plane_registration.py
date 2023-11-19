@@ -155,7 +155,7 @@ def generate_mean_episodic_fov_pairings_registered_frames(
 def paired_plane_cached_movie(h5_file: Path,
                               reg_df: pd.DataFrame,
                               tmp_dir: Path = Path("../scratch/"),
-                              chunk_size=500
+                              chunk_size=5000
                               )
     """Transform frames and save to h5 file
 
