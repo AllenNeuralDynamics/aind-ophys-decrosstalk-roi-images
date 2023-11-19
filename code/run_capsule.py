@@ -6,7 +6,7 @@ import shutil
 import numpy as np
 import paired_plane_registration as ppr
 import decrosstalk_roi_image as dri
-
+import pandas as pd
 
 def decrosstalk_roim(oeid, paired_oeid, input_dir, output_dir):
     logging.info(f"Input directory, {input_dir}")
@@ -65,6 +65,11 @@ def decrosstalk_roim(oeid, paired_oeid, input_dir, output_dir):
                 f["data"][start_frame:end_frame] = recon_signal_data
         i += 1
 
+def prepare_cached_paired_plane_movies(oeid1, oeid2, input_dir):
+    h5_file = input_dir / f"{oeid1}.h5"
+    oeid_mt = input_dir / f"{oeid2}_motion_transform.csv"
+    transform_df = pd.read_csv(oeid_mt)
+    return ppr.paired_plane_cached_movie(h5_file, transform_df)
 
 def run():
     """basic run function"""
@@ -80,9 +85,11 @@ def run():
             (oeid1, oeid2),
             save_dir=output_dir,
         )
+        oeid1_paired_reg = ppr.paired_plane_cached_movie(oeid1, oeid2, i)
+        oeid2_paired_reg = ppr.paired_plane_cached_movie(oeid2, oeid1, i)
         logging.info(f"Creating movie...")
-        decrosstalk_roim(oeid1, oeid2, i, output_dir)
-        decrosstalk_roim(oeid2, oeid1, i, output_dir)
+        decrosstalk_roim(oeid1, oeid2, oeid2_paired_reg, i, output_dir)
+        decrosstalk_roim(oeid2, oeid1, oeid1_paired_reg, i, output_dir)
 
 
 if __name__ == "__main__":

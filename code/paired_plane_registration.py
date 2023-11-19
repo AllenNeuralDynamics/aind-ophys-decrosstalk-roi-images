@@ -51,6 +51,7 @@ def generate_mean_episodic_fov_pairings_registered_frames(
     num_frames_to_avg=1000,
 ):
     """Generate mean episodic FOVs registered to the paired experiment for both experiments in the pair
+    Create a full paired registered movie in a temp directory to get torn down at end of capsule processing
 
     Parameters
     ----------
@@ -64,7 +65,10 @@ def generate_mean_episodic_fov_pairings_registered_frames(
         Maximum number of epochs to calculate the mean FOV image for
     num_frames_to_avg : int
         Number of frames to average to calculate the mean FOV image
-
+    
+    Returns
+    -------
+    Path to temporary paired registered movie
     """
     assert len(oeids) == 2
     if not save_dir.is_dir():
@@ -148,6 +152,70 @@ def generate_mean_episodic_fov_pairings_registered_frames(
         with h5py.File(save_dir / f"{k}_paired_reg_mean_episodic_fov.h5", "w") as f:
             f.create_dataset("data", data=mean_fov)
 
+def paired_plane_cached_movie(h5_file: Path,
+                              reg_df: pd.DataFrame,
+                              tmp_dir: Path = Path("../scratch/"),
+                              chunk_size=500
+                              )
+    """Transform frames and save to h5 file
+
+    Parameters
+    ----------
+    h5_file : Path
+        movie path to the non-motion corrected movie
+    reg_df : pandas.DataFrame
+        registration DataFrame (from the csv file) for the pair associated with the non-motion corrected movie
+    save_path : Path, optional
+        path to save transformed h5 file, by default None
+    return_rframes : bool, optional
+        return registered frames, by default False
+
+    Returns
+    -------
+    Path to temporary h5 file
+    """
+
+    with h5py.File(h5_file, "r") as f:
+        data_length = f['data'].shape[0]
+        no_of_chunks = data_length // chunk_size
+        # assert that frames and shifts are the same length
+        y_shifts = reg_df['y'].values
+        x_shifts = reg_df['x'].values
+        run_nonrigid = False
+        if 'nonrigid_x' in reg_df.columns:
+            run_nonrigid = True
+            # from default parameters:
+            # TODO: read this from the log file
+            Ly = 512
+            Lx = 512
+            block_size = (128, 128)
+            blocks = nonrigid.make_blocks(Ly=Ly, Lx=Lx, block_size=block_size)
+            ymax1 = np.vstack(reg_df.nonrigid_y.values)
+            xmax1 = np.vstack(reg_df.nonrigid_x.values)
+        assert len(data_length) == len(y_shifts) == len(x_shifts)
+        if run_nonrigid:
+            assert len(data_length) == ymax1.shape[0] == xmax1.shape[0]
+        for i in range(no_of_chunks):
+            if i == no_of_chunks:
+                r_frames = np.zeros_like(f['data'][i * chunk_size:])
+            else:
+                r_frames = np.zeros_like(f['data'][i * chunk_size: i * (chunk_size - 1)])
+            for i, (frame, dy, dx) in enumerate(zip(data_length, y_shifts, x_shifts)):
+                r_frames[i] = shift_frame(frame=frame, dy=dy, dx=dx)
+            if run_nonrigid:
+                r_frames = nonrigid.transform_data(r_frames, yblock=blocks[0], xblock=blocks[1], nblocks=blocks[2],
+                                                ymax1=ymax1, xmax1=xmax1, bilinear=True)
+                # uint16 is preferrable, but suite2p default seems like int16, and other files are in int16
+                # Suite2p codes also need to be changed to work with uint16 (e.g., using nonrigid_uint16 branch)
+                # njit pre-defined data type
+                # TODO: change all processing into uint16 in the future
+                r_frames = r_frames.astype(np.int16)
+
+            # save r_frames
+            temp_path = tmp_dir / f'{h5_file.name.split(".")[0]}_registered_to_pair.h5'
+            with h5py.File(temp_path, 'w') as f:
+                f.create_dataset('data', data=r_frames)
+    return temp_path
 
 def shift_frame(frame: np.ndarray, dy: int, dx: int) -> np.ndarray:
     """
