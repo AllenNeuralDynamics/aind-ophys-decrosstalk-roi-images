@@ -67,6 +67,8 @@ def decrosstalk_roim(oeid, paired_oeid, full_paired_reg_oeid, input_dir, output_
                 f["data"].resize((f["data"].shape[0] + recon_signal_data.shape[0]), axis=0)
                 f["data"][start_frame:end_frame] = recon_signal_data
         i += 1
+        # generate the episodic mean fov decrosstalk movie
+        ppr.episodic_mean_fov(decrosstalk_fn, output_dir)
     # remove the paired cache when finished
     os.remove(full_paired_reg_oeid)
 
