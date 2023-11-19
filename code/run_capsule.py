@@ -7,8 +7,10 @@ import numpy as np
 import paired_plane_registration as ppr
 import decrosstalk_roi_image as dri
 import pandas as pd
+import os
 
-def decrosstalk_roim(oeid, paired_oeid, input_dir, output_dir):
+
+def decrosstalk_roim(oeid, paired_oeid, full_paired_reg_oeid, input_dir, output_dir):
     logging.info(f"Input directory, {input_dir}")
     logging.info(f"Output directory, {output_dir}")
     logging.info(f"Ophys experiment ID pairs, {oeid}, {paired_oeid}")
@@ -20,7 +22,7 @@ def decrosstalk_roim(oeid, paired_oeid, input_dir, output_dir):
     shutil.copy(oeid_pj, output_dir / "processing.json")
     paired_reg_fn = list(input_dir.glob(f"{paired_oeid}_paired_reg_mean_episodic_fov.h5"))[0]
 
-    ## Just to get alpha and beta for the experiment:
+    ## Just to get alpha and beta for the experiment using the episodic mean fov paired movie
     _, alpha_list, beta_list, mean_norm_mi_list = dri.decrosstalk_roi_image_from_episodic_mean_fov(
         oeid, paired_reg_fn, input_dir
     )
@@ -38,10 +40,11 @@ def decrosstalk_roim(oeid, paired_oeid, input_dir, output_dir):
 
     decrosstalk_fn = output_dir / f"{oeid}_decrosstalk.h5"
 
+    # generate the decrosstalk movie with alpha and beta values calculated above using the full paired registered movie
     i = 0
-    with h5.File(paired_reg_fn, "r") as f:
-        paired_data = f["data"][()]
     for start_frame, end_frame in zip(start_frames, end_frames):
+        with h5.File(full_paired_reg_oeid, "r")as f:
+            paired_data = f["data"][start_frame:end_frame]
         with h5.File(input_dir / f"{oeid}_registered.h5", "r") as f:
             signal_data = f["data"][start_frame:end_frame]
         recon_signal_data = np.zeros_like(signal_data)
@@ -64,6 +67,9 @@ def decrosstalk_roim(oeid, paired_oeid, input_dir, output_dir):
                 f["data"].resize((f["data"].shape[0] + recon_signal_data.shape[0]), axis=0)
                 f["data"][start_frame:end_frame] = recon_signal_data
         i += 1
+    # remove the paired cache when finished
+    os.remove(full_paired_reg_oeid)
+
 
 def prepare_cached_paired_plane_movies(oeid1, oeid2, input_dir):
     h5_file = input_dir / f"{oeid1}.h5"
