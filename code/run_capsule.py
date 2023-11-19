@@ -1,11 +1,11 @@
 """ top level run script """
-import decrosstalk_roi_image as dri
 from pathlib import Path
 import h5py as h5
-import json
 import logging
 import shutil
 import numpy as np
+import paired_plane_registration as ppr
+import decrosstalk_roi_image as dri
 
 
 def decrosstalk_roim(oeid, paired_oeid, input_dir, output_dir):
@@ -74,6 +74,13 @@ def run():
     for i in paired_directories:
         oeid1, oeid2 = str(i.name).split("_")[0], str(i.name).split("_")[-1]
         logging.info(f"Processing pairs, Pair_1, {oeid1}, Pair_2, {oeid2}")
+        logging.info(f"Running paired plane registration...")
+        ppr.generate_mean_episodic_fov_pairings_registered_frames(
+            i,
+            (oeid1, oeid2),
+            save_dir=output_dir,
+        )
+        logging.info(f"Creating movie...")
         decrosstalk_roim(oeid1, oeid2, i, output_dir)
         decrosstalk_roim(oeid2, oeid1, i, output_dir)
 
