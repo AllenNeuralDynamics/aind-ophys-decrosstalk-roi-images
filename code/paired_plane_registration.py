@@ -203,11 +203,16 @@ def paired_plane_cached_movie(h5_file: Path,
                 r_frames = np.zeros_like(f['data'][i * chunk_size:])
             else:
                 r_frames = np.zeros_like(f['data'][i * chunk_size: i * (chunk_size - 1)])
-            for i, (frame, dy, dx) in enumerate(zip(data_length, y_shifts, x_shifts)):
-                r_frames[i] = shift_frame(frame=frame, dy=dy, dx=dx)
+            frame_group = data_length[i * chunk_size: i * (chunk_size - 1)]
+            x_shift_group = x_shifts[i * chunk_size: i * (chunk_size - 1)]
+            y_shift_group = y_shifts[i * chunk_size: i * (chunk_size - 1)]
+            xmax1_group = xmax1[i * chunk_size: i * (chunk_size - 1)]
+            ymax1_group = ymax1[i * chunk_size: i * (chunk_size - 1)]
+            for frame_index, (frame, dy, dx) in enumerate(zip(frame_group, y_shift_group, x_shift_group)):
+                r_frames[frame_index] = shift_frame(frame=frame, dy=dy, dx=dx)
             if run_nonrigid:
                 r_frames = nonrigid.transform_data(r_frames, yblock=blocks[0], xblock=blocks[1], nblocks=blocks[2],
-                                                ymax1=ymax1, xmax1=xmax1, bilinear=True)
+                                                ymax1=ymax1_group, xmax1=xmax1_group, bilinear=True)
                 # uint16 is preferrable, but suite2p default seems like int16, and other files are in int16
                 # Suite2p codes also need to be changed to work with uint16 (e.g., using nonrigid_uint16 branch)
                 # njit pre-defined data type
@@ -216,8 +221,12 @@ def paired_plane_cached_movie(h5_file: Path,
 
             # save r_frames
             temp_path = tmp_dir / f'{h5_file.name.split(".")[0]}_registered_to_pair.h5'
-            with h5py.File(temp_path, 'w') as f:
-                f.create_dataset('data', data=r_frames)
+            if i == 0:
+                with h5py.File(temp_path, 'w') as f:
+                    f.create_dataset('data', (data_length, 512, 512), maxshape=(chunk_size, 512, 512), chunk=(100, 512, 512))
+            else:
+                with h5py.File(temp_path, 'w') as f:
+                    f['data'][i * chunk_size: i * (chunk_size - 1)] = r_frames
     return temp_path
 
 def shift_frame(frame: np.ndarray, dy: int, dx: int) -> np.ndarray:
