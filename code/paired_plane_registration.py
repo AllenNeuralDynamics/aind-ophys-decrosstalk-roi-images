@@ -152,13 +152,14 @@ def generate_mean_episodic_fov_pairings_registered_frames(
 
                 mean_fov[i] = np.mean(epoch_registered, axis=0)
 
-        with h5py.File(save_dir / f"{k}_paired_reg_mean_episodic_fov.h5", "w") as f:
-            f.create_dataset("data", data=mean_fov)
+            with h5py.File(save_dir / f"{k}_paired_reg_mean_episodic_fov.h5", "w") as f:
+                f.create_dataset("data", data=mean_fov)
 
 def paired_plane_cached_movie(h5_file: Path,
                               reg_df: pd.DataFrame,
                               tmp_dir: Path = Path("../scratch/"),
-                              chunk_size=5000
+                              chunk_size=5000, 
+                              non_rigid=True
                               )
     """Transform frames and save to h5 file
 
@@ -186,7 +187,9 @@ def paired_plane_cached_movie(h5_file: Path,
         y_shifts = reg_df['y'].values
         x_shifts = reg_df['x'].values
         run_nonrigid = False
-        if 'nonrigid_x' in reg_df.columns:
+        if non_rigid:
+            assert "nonrigid_x" in reg_df.columns
+            assert "nonrigid_y" in reg_df.columns
             run_nonrigid = True
             # from default parameters:
             # TODO: read this from the log file
@@ -221,7 +224,7 @@ def paired_plane_cached_movie(h5_file: Path,
             temp_path = tmp_dir / f'{h5_file.name.split(".")[0]}_registered_to_pair.h5'
             if i == 0:
                 with h5py.File(temp_path, 'w') as f:
-                    f.create_dataset('data', (data_length, 512, 512), maxshape=(chunk_size, 512, 512), chunk=(100, 512, 512))
+                    f.create_dataset('data', (data_length, 512, 512), maxshape=(chunk_size, 512, 512), chunk=(1000, 512, 512))
             else:
                 with h5py.File(temp_path, 'w') as f:
                     f['data'][start_frame:end_frame] = r_frames
@@ -334,6 +337,9 @@ def episodic_mean_fov(movie_fn, save_dir, max_num_epochs=10, num_frames_to_avg=1
     num_frames_to_avg : int
         Number of frames to average to calculate the mean FOV image
 
+    Returns
+    -------
+    Path to the mean FOV image h5 file
     """
     # Load the movie
     if not str(movie_fn).endswith(".h5"):
@@ -355,6 +361,8 @@ def episodic_mean_fov(movie_fn, save_dir, max_num_epochs=10, num_frames_to_avg=1
         for i in range(num_epochs):
             start_frame = start_frames[i]
             mean_fov[i] = np.mean(f["data"][start_frame : start_frame + num_frames_to_avg], axis=0)
-    save_path = save_dir / f"{movie_fn.stem}_mean_fov.h5"
+    save_path = save_dir / f"{movie_fn.stem}_episodic_mean_fov.h5"
     with h5py.File(save_path, "w") as f:
         f.create_dataset("data", data=mean_fov)
+    
+    return save_path

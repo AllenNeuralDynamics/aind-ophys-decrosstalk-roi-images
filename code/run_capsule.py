@@ -14,12 +14,11 @@ def decrosstalk_roim(oeid, paired_oeid, input_dir, output_dir):
     logging.info(f"Output directory, {output_dir}")
     logging.info(f"Ophys experiment ID pairs, {oeid}, {paired_oeid}")
     output_dir = output_dir / oeid
-    output_dir.mkdir(exist_ok=True)
     oeid_pj = list(input_dir.glob(f"{oeid}_processing.json"))[0]
     oeid_mt = input_dir / f"{oeid}_motion_transform.csv"
     shutil.copy(oeid_mt, output_dir)
     shutil.copy(oeid_pj, output_dir / "processing.json")
-    paired_reg_fn = list(input_dir.glob(f"{paired_oeid}_paired_reg_mean_episodic_fov.h5"))[0]
+    paired_reg_fn = list(input_dir.glob(f"{paired_oeid}_registered_to_pair_episodic_mean_fov.h5"))[0]
 
     ## Just to get alpha and beta for the experiment:
     _, alpha_list, beta_list, mean_norm_mi_list = dri.decrosstalk_roi_image_from_episodic_mean_fov(
@@ -92,14 +91,14 @@ def run():
         logging.info(f"Processing pairs, Pair_1, {oeid1}, Pair_2, {oeid2}")
         logging.info(f"Running paired plane registration...")
         non_rigid = check_non_rigid_registration(i, oeid1)
-        ppr.generate_mean_episodic_fov_pairings_registered_frames(
-            i,
-            (oeid1, oeid2),
-            save_dir=output_dir,
-            non_rigid=non_rigid
-        )
-        oeid1_paired_reg = prepare_cached_paired_plane_movies(oeid1, oeid2, i)
-        oeid2_paired_reg = prepare_cached_paired_plane_movies(oeid2, oeid1, i)
+        oeid1_paired_reg = prepare_cached_paired_plane_movies(oeid1, oeid2, i, non_rigid=non_rigid)
+        oeid2_paired_reg = prepare_cached_paired_plane_movies(oeid2, oeid1, i, non_rigid=non_rigid)
+        results_dir_oeid1 = output_dir / oeid1
+        results_dir_oeid2 = output_dir / oeid2
+        results_dir_oeid1.mkdir(exist_ok=True)
+        results_dir_oeid2.mkdir(exist_ok=True) 
+        ppr.episodic_mean_fov(oeid1_paired_reg, output_dir / oeid1)
+        ppr.episodic_mean_fov(oeid2_paired_reg, output_dir / oeid2)
         logging.info(f"Creating movie...")
         decrosstalk_roim(oeid1, oeid2, oeid2_paired_reg, i, output_dir)
         decrosstalk_roim(oeid2, oeid1, oeid1_paired_reg, i, output_dir)
