@@ -180,7 +180,8 @@ def paired_plane_cached_movie(h5_file: Path,
 
     with h5py.File(h5_file, "r") as f:
         data_length = f['data'].shape[0]
-        no_of_chunks = data_length // chunk_size
+        start_frames = np.arange(0, data_length, chunk_size)
+        end_frames = np.append(start_frames[1:], data_length)
         # assert that frames and shifts are the same length
         y_shifts = reg_df['y'].values
         x_shifts = reg_df['x'].values
@@ -198,16 +199,13 @@ def paired_plane_cached_movie(h5_file: Path,
         assert len(data_length) == len(y_shifts) == len(x_shifts)
         if run_nonrigid:
             assert len(data_length) == ymax1.shape[0] == xmax1.shape[0]
-        for i in range(no_of_chunks):
-            if i == no_of_chunks:
-                r_frames = np.zeros_like(f['data'][i * chunk_size:])
-            else:
-                r_frames = np.zeros_like(f['data'][i * chunk_size: i * (chunk_size - 1)])
-            frame_group = data_length[i * chunk_size: i * (chunk_size - 1)]
-            x_shift_group = x_shifts[i * chunk_size: i * (chunk_size - 1)]
-            y_shift_group = y_shifts[i * chunk_size: i * (chunk_size - 1)]
-            xmax1_group = xmax1[i * chunk_size: i * (chunk_size - 1)]
-            ymax1_group = ymax1[i * chunk_size: i * (chunk_size - 1)]
+        for start_frame, end_frame in zip(start_frames, end_frames):
+            r_frames = np.zeros_like(f['data'][start_frame:end_frame])
+            frame_group = data_length[start_frame:end_frame]
+            x_shift_group = x_shifts[start_frame:end_frame]
+            y_shift_group = y_shifts[start_frame:end_frame]
+            xmax1_group = xmax1[start_frame:end_frame]
+            ymax1_group = ymax1[start_frame:end_frame]
             for frame_index, (frame, dy, dx) in enumerate(zip(frame_group, y_shift_group, x_shift_group)):
                 r_frames[frame_index] = shift_frame(frame=frame, dy=dy, dx=dx)
             if run_nonrigid:
@@ -226,7 +224,7 @@ def paired_plane_cached_movie(h5_file: Path,
                     f.create_dataset('data', (data_length, 512, 512), maxshape=(chunk_size, 512, 512), chunk=(100, 512, 512))
             else:
                 with h5py.File(temp_path, 'w') as f:
-                    f['data'][i * chunk_size: i * (chunk_size - 1)] = r_frames
+                    f['data'][start_frame:end_frame] = r_frames
     return temp_path
 
 def shift_frame(frame: np.ndarray, dy: int, dx: int) -> np.ndarray:
