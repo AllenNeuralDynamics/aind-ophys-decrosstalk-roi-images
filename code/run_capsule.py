@@ -38,7 +38,7 @@ def decrosstalk_roim(oeid, paired_oeid, input_dir, output_dir):
     data_length = data_shape[0]
     start_frames = np.arange(0, data_length, chunk_size)
     end_frames = np.append(start_frames[1:], data_length)
-
+    assert end_frames[-1] == data_length
     decrosstalk_fn = output_dir / f"{oeid}_decrosstalk.h5"
 
     # generate the decrosstalk movie with alpha and beta values calculated above using the full paired registered movie
@@ -46,12 +46,13 @@ def decrosstalk_roim(oeid, paired_oeid, input_dir, output_dir):
     for start_frame, end_frame in zip(start_frames, end_frames):
         with h5.File(paired_reg_full_fn, "r")as f:
             paired_data = f["data"][start_frame:end_frame]
+            assert paired_data.shape[0] == end_frame[-1]  
         with h5.File(input_dir / f"{oeid}_registered.h5", "r") as f:
             signal_data = f["data"][start_frame:end_frame]
         recon_signal_data = np.zeros_like(signal_data)
-        for j in range(signal_data.shape[0]):
-            recon_signal_data[j, :, :] = dri.apply_mixing_matrix(
-                alpha, beta, signal_data[j, :, :], paired_data[i, :, :]
+        for temp_frame_index in range(signal_data.shape[0]):
+            recon_signal_data[temp_frame_index, :, :] = dri.apply_mixing_matrix(
+                alpha, beta, signal_data[temp_frame_index, :, :], paired_data[temp_frame_index, :, :]
             )[0]
         if chunk_no == 0:
             with h5.File(decrosstalk_fn, "w") as f:
@@ -68,6 +69,7 @@ def decrosstalk_roim(oeid, paired_oeid, input_dir, output_dir):
                 f["data"].resize((f["data"].shape[0] + recon_signal_data.shape[0]), axis=0)
                 f["data"][start_frame:end_frame] = recon_signal_data
         chunk_no += 1
+    
     # remove the paired cache when finished
 
 
