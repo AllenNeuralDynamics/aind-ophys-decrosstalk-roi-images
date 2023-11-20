@@ -11,13 +11,14 @@ import os
 import json
 
 
-def decrosstalk_roim(oeid, paired_oeid, full_paired_reg_oeid, input_dir, output_dir):
+def decrosstalk_roim(oeid, paired_oeid, input_dir, output_dir):
     logging.info(f"Input directory, {input_dir}")
     logging.info(f"Output directory, {output_dir}")
     logging.info(f"Ophys experiment ID pairs, {oeid}, {paired_oeid}")
     output_dir = output_dir / oeid
     oeid_pj = list(input_dir.glob(f"{oeid}_processing.json"))[0]
     oeid_mt = input_dir / f"{oeid}_motion_transform.csv"
+    paired_reg_full_fn = list(input_dir.glob(f"{paired_oeid}_registered.h5"))[0]
     shutil.copy(oeid_mt, output_dir)
     shutil.copy(oeid_pj, output_dir / "processing.json")
     paired_reg_emf_fn = list(input_dir.glob(f"{paired_oeid}_registered_to_pair_episodic_mean_fov.h5"))[0]
@@ -43,7 +44,7 @@ def decrosstalk_roim(oeid, paired_oeid, full_paired_reg_oeid, input_dir, output_
     # generate the decrosstalk movie with alpha and beta values calculated above using the full paired registered movie
     i = 0
     for start_frame, end_frame in zip(start_frames, end_frames):
-        with h5.File(full_paired_reg_oeid, "r")as f:
+        with h5.File(paired_reg_full_fn, "r")as f:
             paired_data = f["data"][start_frame:end_frame]
         with h5.File(input_dir / f"{oeid}_registered.h5", "r") as f:
             signal_data = f["data"][start_frame:end_frame]
@@ -68,7 +69,7 @@ def decrosstalk_roim(oeid, paired_oeid, full_paired_reg_oeid, input_dir, output_
                 f["data"][start_frame:end_frame] = recon_signal_data
         i += 1
     # remove the paired cache when finished
-    os.remove(full_paired_reg_oeid)
+    os.remove(paired_reg_full_fn)
 
 
 def prepare_cached_paired_plane_movies(oeid1, oeid2, input_dir):
@@ -106,8 +107,8 @@ def run():
         ppr.episodic_mean_fov(oeid1_paired_reg, output_dir / oeid1)
         ppr.episodic_mean_fov(oeid2_paired_reg, output_dir / oeid2)
         logging.info(f"Creating movie...")
-        decrosstalk_roim(oeid1, oeid2, oeid2_paired_reg, i, output_dir)
-        decrosstalk_roim(oeid2, oeid1, oeid1_paired_reg, i, output_dir)
+        decrosstalk_roim(oeid1, oeid2, i, output_dir)
+        decrosstalk_roim(oeid2, oeid1, i, output_dir)
 
 
 if __name__ == "__main__":
