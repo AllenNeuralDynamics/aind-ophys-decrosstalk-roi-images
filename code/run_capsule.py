@@ -7,7 +7,7 @@ import numpy as np
 import paired_plane_registration as ppr
 import decrosstalk_roi_image as dri
 import pandas as pd
-import os
+import shutil
 import json
 
 
@@ -18,7 +18,7 @@ def decrosstalk_roim(oeid, paired_oeid, input_dir, output_dir):
     output_dir = output_dir / oeid
     oeid_pj = list(input_dir.glob(f"{oeid}_processing.json"))[0]
     oeid_mt = input_dir / f"{oeid}_motion_transform.csv"
-    paired_reg_full_fn = list(input_dir.glob(f"{paired_oeid}_registered.h5"))[0]
+    paired_reg_full_fn = list(input_dir.glob(f"{paired_oeid}_registered_to_pair.h5"))[0]
     shutil.copy(oeid_mt, output_dir)
     shutil.copy(oeid_pj, output_dir / "processing.json")
     paired_reg_emf_fn = list(input_dir.glob(f"{paired_oeid}_registered_to_pair_episodic_mean_fov.h5"))[0]
@@ -69,7 +69,6 @@ def decrosstalk_roim(oeid, paired_oeid, input_dir, output_dir):
                 f["data"][start_frame:end_frame] = recon_signal_data
         i += 1
     # remove the paired cache when finished
-    os.remove(paired_reg_full_fn)
 
 
 def prepare_cached_paired_plane_movies(oeid1, oeid2, input_dir):
@@ -109,6 +108,8 @@ def run():
         logging.info(f"Creating movie...")
         decrosstalk_roim(oeid1, oeid2, i, output_dir)
         decrosstalk_roim(oeid2, oeid1, i, output_dir)
+        shutil.rmtree(Path("../scratch/") / f"{oeid1}_registered_to_pair.h5")
+        shutil.rmtree(Path("../scratch/") / f"{oeid2}_registered_to_pair.h5")
 
 
 if __name__ == "__main__":
