@@ -98,8 +98,8 @@ def run():
             save_dir=output_dir,
             non_rigid=non_rigid
         )
-        oeid1_paired_reg = ppr.paired_plane_cached_movie(oeid1, oeid2, i)
-        oeid2_paired_reg = ppr.paired_plane_cached_movie(oeid2, oeid1, i)
+        oeid1_paired_reg = prepare_cached_paired_plane_movies(oeid1, oeid2, i)
+        oeid2_paired_reg = prepare_cached_paired_plane_movies(oeid2, oeid1, i)
         logging.info(f"Creating movie...")
         decrosstalk_roim(oeid1, oeid2, oeid2_paired_reg, i, output_dir)
         decrosstalk_roim(oeid2, oeid1, oeid1_paired_reg, i, output_dir)
