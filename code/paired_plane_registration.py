@@ -10,14 +10,14 @@ import shutil
 # TODO: implement per experiment level
 
 
-def get_s2p_motion_transform(csv_path: Path) -> pd.DataFrame:
+def get_s2p_motion_transform(csv_path: Path, non_rigid: bool = True) -> pd.DataFrame:
     """Get suite2p motion transform for experiment
     Also correct for data type in nonrigid columns (from str to np.array)
 
     Parameters
     ----------
     csv_path : Path
-        path to suite2p rigid motion transform
+        path to suite2p rigid or non-rigid motion transform
 
     Returns
     -------
@@ -27,7 +27,9 @@ def get_s2p_motion_transform(csv_path: Path) -> pd.DataFrame:
     """
 
     reg_df = pd.read_csv(csv_path)
-    if "nonrigid_x" in reg_df.columns:
+    if non_rigid:
+        assert "nonrigid_x" in reg_df.columns
+        assert "nonrigid_y" in reg_df.columns
         if isinstance(reg_df.nonrigid_x[0], str):
             reg_df.nonrigid_x = reg_df.nonrigid_x.apply(
                 lambda x: np.array(
@@ -49,6 +51,7 @@ def generate_mean_episodic_fov_pairings_registered_frames(
     save_dir: Path = Path("../results/"),
     max_num_epochs=10,
     num_frames_to_avg=1000,
+    non_rigid=True
 ):
     """Generate mean episodic FOVs registered to the paired experiment for both experiments in the pair
     Create a full paired registered movie in a temp directory to get torn down at end of capsule processing
@@ -79,10 +82,10 @@ def generate_mean_episodic_fov_pairings_registered_frames(
         paired_plane_data[oeid]["raw_movie_fp"] = input_dir / oeid / f"{oeid}.h5"
     # to tie the paired suite2p rigid motion transform to the correct oeid
     paired_plane_data[oeids[0]]["paired_motion_df"] = get_s2p_motion_transform(
-        input_dir / oeids[-1] / f"{oeids[-1]}_motion_transform.csv"
+        input_dir / oeids[-1] / f"{oeids[-1]}_motion_transform.csv", non_rigid=non_rigid
     )
     paired_plane_data[oeids[-1]]["paired_motion_df"] = get_s2p_motion_transform(
-        input_dir / oeids[0] / f"{oeids[0]}_motion_transform.csv"
+        input_dir / oeids[0] / f"{oeids[0]}_motion_transform.csv", non_rigid=non_rigid
     )
     shutil.copy(
         input_dir / oeids[0] / f"{oeids[0]}_motion_transform.csv",

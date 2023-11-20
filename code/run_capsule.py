@@ -7,6 +7,7 @@ import numpy as np
 import paired_plane_registration as ppr
 import decrosstalk_roi_image as dri
 import pandas as pd
+import json
 
 def decrosstalk_roim(oeid, paired_oeid, input_dir, output_dir):
     logging.info(f"Input directory, {input_dir}")
@@ -71,6 +72,16 @@ def prepare_cached_paired_plane_movies(oeid1, oeid2, input_dir):
     transform_df = pd.read_csv(oeid_mt)
     return ppr.paired_plane_cached_movie(h5_file, transform_df)
 
+def check_non_rigid_registration(input_dir, oeid):
+    """check processing json to see if non-rigid registration was run"""
+    oeid_pj = list(input_dir.glob(f"{oeid}_processing.json"))[0]
+    with open(oeid_pj, "r") as f:
+        pj = json.load(f)
+    if "nonrigid" in pj["data_processes"][0]["parameters"]["nonrigid"]:
+        return True
+    else:
+        return False
+
 def run():
     """basic run function"""
     input_dir = Path("../data/").resolve()
@@ -80,10 +91,12 @@ def run():
         oeid1, oeid2 = str(i.name).split("_")[0], str(i.name).split("_")[-1]
         logging.info(f"Processing pairs, Pair_1, {oeid1}, Pair_2, {oeid2}")
         logging.info(f"Running paired plane registration...")
+        non_rigid = check_non_rigid_registration(i, oeid1)
         ppr.generate_mean_episodic_fov_pairings_registered_frames(
             i,
             (oeid1, oeid2),
             save_dir=output_dir,
+            non_rigid=non_rigid
         )
         oeid1_paired_reg = ppr.paired_plane_cached_movie(oeid1, oeid2, i)
         oeid2_paired_reg = ppr.paired_plane_cached_movie(oeid2, oeid1, i)
