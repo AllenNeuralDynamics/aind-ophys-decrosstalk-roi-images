@@ -93,17 +93,17 @@ def run():
         non_rigid_oeid1 = check_non_rigid_registration(i, oeid1)
         non_rigid_oeid2 = check_non_rigid_registration(i, oeid2)
         assert non_rigid_oeid1 == non_rigid_oeid2
-        oeid1_paired_reg = prepare_cached_paired_plane_movies(oeid1, oeid2, i, non_rigid=non_rigid_oeid1)
-        oeid2_paired_reg = prepare_cached_paired_plane_movies(oeid2, oeid1, i, non_rigid=non_rigid_oeid1)
+        oeid1_paired_reg_fn = prepare_cached_paired_plane_movies(oeid1, oeid2, i, non_rigid=non_rigid_oeid1)
+        oeid2_paired_reg_fn = prepare_cached_paired_plane_movies(oeid2, oeid1, i, non_rigid=non_rigid_oeid1)
         results_dir_oeid1 = output_dir / oeid1
         results_dir_oeid2 = output_dir / oeid2
         results_dir_oeid1.mkdir(exist_ok=True)
         results_dir_oeid2.mkdir(exist_ok=True) 
-        ppr.episodic_mean_fov(oeid1_paired_reg, output_dir / oeid1)
-        ppr.episodic_mean_fov(oeid2_paired_reg, output_dir / oeid2)
+        ppr.episodic_mean_fov(oeid1_paired_reg_fn, output_dir / oeid1)
+        ppr.episodic_mean_fov(oeid2_paired_reg_fn, output_dir / oeid2)
         logging.info(f"Creating movie...")
-        decrosstalk_roim(oeid1, oeid2, oeid2_paired_reg, i, output_dir)
-        decrosstalk_roim(oeid2, oeid1, oeid1_paired_reg, i, output_dir)
+        decrosstalk_roim(oeid1, oeid2, oeid2_paired_reg_fn, i, output_dir)
+        decrosstalk_roim(oeid2, oeid1, oeid1_paired_reg_fn, i, output_dir)
 
 
 if __name__ == "__main__":
