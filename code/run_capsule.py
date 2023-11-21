@@ -7,7 +7,7 @@ import numpy as np
 import paired_plane_registration as ppr
 import decrosstalk_roi_image as dri
 import pandas as pd
-import os
+import json
 
 
 def decrosstalk_roim(oeid, paired_oeid, full_paired_reg_oeid, input_dir, output_dir):
@@ -15,12 +15,11 @@ def decrosstalk_roim(oeid, paired_oeid, full_paired_reg_oeid, input_dir, output_
     logging.info(f"Output directory, {output_dir}")
     logging.info(f"Ophys experiment ID pairs, {oeid}, {paired_oeid}")
     output_dir = output_dir / oeid
-    output_dir.mkdir(exist_ok=True)
     oeid_pj = list(input_dir.glob(f"{oeid}_processing.json"))[0]
     oeid_mt = input_dir / f"{oeid}_motion_transform.csv"
     shutil.copy(oeid_mt, output_dir)
     shutil.copy(oeid_pj, output_dir / "processing.json")
-    paired_reg_fn = list(input_dir.glob(f"{paired_oeid}_paired_reg_mean_episodic_fov.h5"))[0]
+    paired_reg_fn = list(input_dir.glob(f"{paired_oeid}_registered_to_pair_episodic_mean_fov.h5"))[0]
 
     ## Just to get alpha and beta for the experiment using the episodic mean fov paired movie
     _, alpha_list, beta_list, mean_norm_mi_list = dri.decrosstalk_roi_image_from_episodic_mean_fov(
@@ -79,6 +78,16 @@ def prepare_cached_paired_plane_movies(oeid1, oeid2, input_dir):
     transform_df = pd.read_csv(oeid_mt)
     return ppr.paired_plane_cached_movie(h5_file, transform_df)
 
+def check_non_rigid_registration(input_dir, oeid):
+    """check processing json to see if non-rigid registration was run"""
+    oeid_pj = list(input_dir.glob(f"{oeid}_processing.json"))[0]
+    with open(oeid_pj, "r") as f:
+        pj = json.load(f)
+    if "nonrigid" in pj["data_processes"][0]["parameters"]["nonrigid"]:
+        return True
+    else:
+        return False
+
 def run():
     """basic run function"""
     input_dir = Path("../data/").resolve()
@@ -88,16 +97,20 @@ def run():
         oeid1, oeid2 = str(i.name).split("_")[0], str(i.name).split("_")[-1]
         logging.info(f"Processing pairs, Pair_1, {oeid1}, Pair_2, {oeid2}")
         logging.info(f"Running paired plane registration...")
-        ppr.generate_mean_episodic_fov_pairings_registered_frames(
-            i,
-            (oeid1, oeid2),
-            save_dir=output_dir,
-        )
-        oeid1_paired_reg = ppr.paired_plane_cached_movie(oeid1, oeid2, i)
-        oeid2_paired_reg = ppr.paired_plane_cached_movie(oeid2, oeid1, i)
+        non_rigid_oeid1 = check_non_rigid_registration(i, oeid1)
+        non_rigid_oeid2 = check_non_rigid_registration(i, oeid2)
+        assert non_rigid_oeid1 == non_rigid_oeid2
+        oeid1_paired_reg_fn = prepare_cached_paired_plane_movies(oeid1, oeid2, i, non_rigid=non_rigid_oeid1)
+        oeid2_paired_reg_fn = prepare_cached_paired_plane_movies(oeid2, oeid1, i, non_rigid=non_rigid_oeid1)
+        results_dir_oeid1 = output_dir / oeid1
+        results_dir_oeid2 = output_dir / oeid2
+        results_dir_oeid1.mkdir(exist_ok=True)
+        results_dir_oeid2.mkdir(exist_ok=True) 
+        ppr.episodic_mean_fov(oeid1_paired_reg_fn, output_dir / oeid1)
+        ppr.episodic_mean_fov(oeid2_paired_reg_fn, output_dir / oeid2)
         logging.info(f"Creating movie...")
-        decrosstalk_roim(oeid1, oeid2, oeid2_paired_reg, i, output_dir)
-        decrosstalk_roim(oeid2, oeid1, oeid1_paired_reg, i, output_dir)
+        decrosstalk_roim(oeid1, oeid2, oeid2_paired_reg_fn, i, output_dir)
+        decrosstalk_roim(oeid2, oeid1, oeid1_paired_reg_fn, i, output_dir)
 
 
 if __name__ == "__main__":
