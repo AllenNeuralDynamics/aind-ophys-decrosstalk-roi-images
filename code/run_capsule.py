@@ -21,12 +21,17 @@ def decrosstalk_roim(oeid, paired_oeid, input_dir, output_dir):
     paired_reg_full_fn = list(input_dir.glob(f"{paired_oeid}_registered_to_pair.h5"))[0]
     shutil.copy(oeid_mt, output_dir)
     shutil.copy(oeid_pj, output_dir / "processing.json")
-    paired_reg_emf_fn = list(input_dir.glob(f"{paired_oeid}_registered_to_pair_episodic_mean_fov.h5"))[0]
+    paired_reg_emf_fn = list(
+        input_dir.glob(f"{paired_oeid}_registered_to_pair_episodic_mean_fov.h5")
+    )[0]
 
     ## Just to get alpha and beta for the experiment using the episodic mean fov paired movie
-    _, alpha_list, beta_list, mean_norm_mi_list = dri.decrosstalk_roi_image_from_episodic_mean_fov(
-        oeid, paired_reg_emf_fn, input_dir
-    )
+    (
+        _,
+        alpha_list,
+        beta_list,
+        mean_norm_mi_list,
+    ) = dri.decrosstalk_roi_image_from_episodic_mean_fov(oeid, paired_reg_emf_fn, input_dir)
     alpha = np.mean(alpha_list)
     beta = np.mean(beta_list)
 
@@ -44,15 +49,18 @@ def decrosstalk_roim(oeid, paired_oeid, input_dir, output_dir):
     # generate the decrosstalk movie with alpha and beta values calculated above using the full paired registered movie
     chunk_no = 0
     for start_frame, end_frame in zip(start_frames, end_frames):
-        with h5.File(paired_reg_full_fn, "r")as f:
+        with h5.File(paired_reg_full_fn, "r") as f:
             paired_data = f["data"][start_frame:end_frame]
-            assert paired_data.shape[0] == end_frame[-1]  
+            assert paired_data.shape[0] == end_frame[-1]
         with h5.File(input_dir / f"{oeid}_registered.h5", "r") as f:
             signal_data = f["data"][start_frame:end_frame]
         recon_signal_data = np.zeros_like(signal_data)
         for temp_frame_index in range(signal_data.shape[0]):
             recon_signal_data[temp_frame_index, :, :] = dri.apply_mixing_matrix(
-                alpha, beta, signal_data[temp_frame_index, :, :], paired_data[temp_frame_index, :, :]
+                alpha,
+                beta,
+                signal_data[temp_frame_index, :, :],
+                paired_data[temp_frame_index, :, :],
             )[0]
         if chunk_no == 0:
             with h5.File(decrosstalk_fn, "w") as f:
@@ -69,7 +77,7 @@ def decrosstalk_roim(oeid, paired_oeid, input_dir, output_dir):
                 f["data"].resize((f["data"].shape[0] + recon_signal_data.shape[0]), axis=0)
                 f["data"][start_frame:end_frame] = recon_signal_data
         chunk_no += 1
-    
+
     # remove the paired cache when finished
 
 
@@ -78,6 +86,7 @@ def prepare_cached_paired_plane_movies(oeid1, oeid2, input_dir):
     oeid_mt = input_dir / f"{oeid2}_motion_transform.csv"
     transform_df = pd.read_csv(oeid_mt)
     return ppr.paired_plane_cached_movie(h5_file, transform_df)
+
 
 def check_non_rigid_registration(input_dir, oeid):
     """check processing json to see if non-rigid registration was run"""
@@ -88,6 +97,7 @@ def check_non_rigid_registration(input_dir, oeid):
         return True
     else:
         return False
+
 
 def run():
     """basic run function"""
@@ -104,7 +114,7 @@ def run():
         results_dir_oeid1 = output_dir / oeid1
         results_dir_oeid2 = output_dir / oeid2
         results_dir_oeid1.mkdir(exist_ok=True)
-        results_dir_oeid2.mkdir(exist_ok=True) 
+        results_dir_oeid2.mkdir(exist_ok=True)
         ppr.episodic_mean_fov(oeid1_paired_reg, output_dir / oeid1)
         ppr.episodic_mean_fov(oeid2_paired_reg, output_dir / oeid2)
         logging.info(f"Creating movie...")

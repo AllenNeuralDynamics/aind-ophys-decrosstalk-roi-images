@@ -51,7 +51,7 @@ def generate_mean_episodic_fov_pairings_registered_frames(
     save_dir: Path = Path("../results/"),
     max_num_epochs=10,
     num_frames_to_avg=1000,
-    non_rigid=True
+    non_rigid=True,
 ):
     """Generate mean episodic FOVs registered to the paired experiment for both experiments in the pair
     Create a full paired registered movie in a temp directory to get torn down at end of capsule processing
@@ -68,7 +68,7 @@ def generate_mean_episodic_fov_pairings_registered_frames(
         Maximum number of epochs to calculate the mean FOV image for
     num_frames_to_avg : int
         Number of frames to average to calculate the mean FOV image
-    
+
     Returns
     -------
     Path to temporary paired registered movie
@@ -155,12 +155,14 @@ def generate_mean_episodic_fov_pairings_registered_frames(
             with h5py.File(save_dir / f"{k}_paired_reg_mean_episodic_fov.h5", "w") as f:
                 f.create_dataset("data", data=mean_fov)
 
-def paired_plane_cached_movie(h5_file: Path,
-                              reg_df: pd.DataFrame,
-                              tmp_dir: Path = Path("../scratch/"),
-                              chunk_size=5000, 
-                              non_rigid=True
-                              )
+
+def paired_plane_cached_movie(
+    h5_file: Path,
+    reg_df: pd.DataFrame,
+    tmp_dir: Path = Path("../scratch/"),
+    chunk_size=5000,
+    non_rigid=True,
+):
     """Transform frames and save to h5 file
 
     Parameters
@@ -180,12 +182,12 @@ def paired_plane_cached_movie(h5_file: Path,
     """
 
     with h5py.File(h5_file, "r") as f:
-        data_length = f['data'].shape[0]
+        data_length = f["data"].shape[0]
         start_frames = np.arange(0, data_length, chunk_size)
         end_frames = np.append(start_frames[1:], data_length)
         # assert that frames and shifts are the same length
-        y_shifts = reg_df['y'].values
-        x_shifts = reg_df['x'].values
+        y_shifts = reg_df["y"].values
+        x_shifts = reg_df["x"].values
         if non_rigid:
             assert "nonrigid_x" in reg_df.columns
             assert "nonrigid_y" in reg_df.columns
@@ -199,17 +201,26 @@ def paired_plane_cached_movie(h5_file: Path,
             xmax1 = np.vstack(reg_df.nonrigid_x.values)
         assert len(data_length) == len(y_shifts) == len(x_shifts)
         for start_frame, end_frame in zip(start_frames, end_frames):
-            r_frames = np.zeros_like(f['data'][start_frame:end_frame])
+            r_frames = np.zeros_like(f["data"][start_frame:end_frame])
             frame_group = data_length[start_frame:end_frame]
             x_shift_group = x_shifts[start_frame:end_frame]
             y_shift_group = y_shifts[start_frame:end_frame]
             xmax1_group = xmax1[start_frame:end_frame]
             ymax1_group = ymax1[start_frame:end_frame]
-            for frame_index, (frame, dy, dx) in enumerate(zip(frame_group, y_shift_group, x_shift_group)):
+            for frame_index, (frame, dy, dx) in enumerate(
+                zip(frame_group, y_shift_group, x_shift_group)
+            ):
                 r_frames[frame_index] = shift_frame(frame=frame, dy=dy, dx=dx)
             if non_rigid:
-                r_frames = nonrigid.transform_data(r_frames, yblock=blocks[0], xblock=blocks[1], nblocks=blocks[2],
-                                                ymax1=ymax1_group, xmax1=xmax1_group, bilinear=True)
+                r_frames = nonrigid.transform_data(
+                    r_frames,
+                    yblock=blocks[0],
+                    xblock=blocks[1],
+                    nblocks=blocks[2],
+                    ymax1=ymax1_group,
+                    xmax1=xmax1_group,
+                    bilinear=True,
+                )
                 # uint16 is preferrable, but suite2p default seems like int16, and other files are in int16
                 # Suite2p codes also need to be changed to work with uint16 (e.g., using nonrigid_uint16 branch)
                 # njit pre-defined data type
@@ -219,12 +230,18 @@ def paired_plane_cached_movie(h5_file: Path,
             # save r_frames
             temp_path = tmp_dir / f'{h5_file.name.split(".")[0]}_registered_to_pair.h5'
             if i == 0:
-                with h5py.File(temp_path, 'w') as f:
-                    f.create_dataset('data', (data_length, 512, 512), maxshape=(chunk_size, 512, 512), chunk=(1000, 512, 512))
+                with h5py.File(temp_path, "w") as f:
+                    f.create_dataset(
+                        "data",
+                        (data_length, 512, 512),
+                        maxshape=(chunk_size, 512, 512),
+                        chunk=(1000, 512, 512),
+                    )
             else:
-                with h5py.File(temp_path, 'w') as f:
-                    f['data'][start_frame:end_frame] = r_frames
+                with h5py.File(temp_path, "w") as f:
+                    f["data"][start_frame:end_frame] = r_frames
     return temp_path
+
 
 def shift_frame(frame: np.ndarray, dy: int, dx: int) -> np.ndarray:
     """
@@ -360,5 +377,5 @@ def episodic_mean_fov(movie_fn, save_dir, max_num_epochs=10, num_frames_to_avg=1
     save_path = save_dir / f"{movie_fn.stem}_episodic_mean_fov.h5"
     with h5py.File(save_path, "w") as f:
         f.create_dataset("data", data=mean_fov)
-    
+
     return save_path
