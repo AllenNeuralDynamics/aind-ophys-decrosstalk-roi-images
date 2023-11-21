@@ -95,23 +95,23 @@ def run():
     output_dir = Path("../results/").resolve()
     paired_directories = list(input_dir.glob("*"))
     for i in paired_directories:
-        oeid1_paired_reg_full_fn, oeid2_paired_reg_full_fn = str(i.name).split("_")[0], str(i.name).split("_")[-1]
-        logging.info(f"Processing pairs, Pair_1, {oeid1_paired_reg_full_fn}, Pair_2, {oeid2_paired_reg_full_fn}")
+        oeid1, oeid2 = str(i.name).split("_")[0], str(i.name).split("_")[-1]
+        logging.info(f"Processing pairs, Pair_1, {oeid1}, Pair_2, {oeid2}")
         logging.info(f"Running paired plane registration...")
-        non_rigid = check_non_rigid_registration(i, oeid1_paired_reg_full_fn)
-        oeid1_paired_reg_full_fn_paired_reg = prepare_cached_paired_plane_movies(oeid1_paired_reg_full_fn, oeid2_paired_reg_full_fn, i, non_rigid=non_rigid)
-        oeid2_paired_reg_full_fn_paired_reg = prepare_cached_paired_plane_movies(oeid2_paired_reg_full_fn, oeid1_paired_reg_full_fn, i, non_rigid=non_rigid)
-        results_dir_oeid1_paired_reg_full_fn = output_dir / oeid1_paired_reg_full_fn
-        results_dir_oeid2_paired_reg_full_fn = output_dir / oeid2_paired_reg_full_fn
-        results_dir_oeid1_paired_reg_full_fn.mkdir(exist_ok=True)
-        results_dir_oeid2_paired_reg_full_fn.mkdir(exist_ok=True) 
-        ppr.episodic_mean_fov(oeid1_paired_reg_full_fn_paired_reg, output_dir / oeid1_paired_reg_full_fn)
-        ppr.episodic_mean_fov(oeid2_paired_reg_full_fn_paired_reg, output_dir / oeid2_paired_reg_full_fn)
+        non_rigid = check_non_rigid_registration(i, oeid1)
+        oeid1_paired_reg = prepare_cached_paired_plane_movies(oeid1, oeid2, i, non_rigid=non_rigid)
+        oeid2_paired_reg = prepare_cached_paired_plane_movies(oeid2, oeid1, i, non_rigid=non_rigid)
+        results_dir_oeid1 = output_dir / oeid1
+        results_dir_oeid2 = output_dir / oeid2
+        results_dir_oeid1.mkdir(exist_ok=True)
+        results_dir_oeid2.mkdir(exist_ok=True) 
+        ppr.episodic_mean_fov(oeid1_paired_reg, output_dir / oeid1)
+        ppr.episodic_mean_fov(oeid2_paired_reg, output_dir / oeid2)
         logging.info(f"Creating movie...")
-        decrosstalk_roim(oeid1_paired_reg_full_fn, oeid2_paired_reg_full_fn, i, output_dir)
-        decrosstalk_roim(oeid2_paired_reg_full_fn, oeid1_paired_reg_full_fn, i, output_dir)
-        shutil.rmtree(Path("../scratch/") / f"{oeid1_paired_reg_full_fn}_registered_to_pair.h5")
-        shutil.rmtree(Path("../scratch/") / f"{oeid2_paired_reg_full_fn}_registered_to_pair.h5")
+        decrosstalk_roim(oeid1, oeid2, i, output_dir)
+        decrosstalk_roim(oeid2, oeid1, i, output_dir)
+        shutil.rmtree(Path("../scratch/") / f"{oeid1}_registered_to_pair.h5")
+        shutil.rmtree(Path("../scratch/") / f"{oeid2}_registered_to_pair.h5")
 
 
 if __name__ == "__main__":

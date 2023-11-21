@@ -186,11 +186,9 @@ def paired_plane_cached_movie(h5_file: Path,
         # assert that frames and shifts are the same length
         y_shifts = reg_df['y'].values
         x_shifts = reg_df['x'].values
-        run_nonrigid = False
         if non_rigid:
             assert "nonrigid_x" in reg_df.columns
             assert "nonrigid_y" in reg_df.columns
-            run_nonrigid = True
             # from default parameters:
             # TODO: read this from the log file
             Ly = 512
@@ -200,8 +198,6 @@ def paired_plane_cached_movie(h5_file: Path,
             ymax1 = np.vstack(reg_df.nonrigid_y.values)
             xmax1 = np.vstack(reg_df.nonrigid_x.values)
         assert len(data_length) == len(y_shifts) == len(x_shifts)
-        if run_nonrigid:
-            assert len(data_length) == ymax1.shape[0] == xmax1.shape[0]
         for start_frame, end_frame in zip(start_frames, end_frames):
             r_frames = np.zeros_like(f['data'][start_frame:end_frame])
             frame_group = data_length[start_frame:end_frame]
@@ -211,7 +207,7 @@ def paired_plane_cached_movie(h5_file: Path,
             ymax1_group = ymax1[start_frame:end_frame]
             for frame_index, (frame, dy, dx) in enumerate(zip(frame_group, y_shift_group, x_shift_group)):
                 r_frames[frame_index] = shift_frame(frame=frame, dy=dy, dx=dx)
-            if run_nonrigid:
+            if non_rigid:
                 r_frames = nonrigid.transform_data(r_frames, yblock=blocks[0], xblock=blocks[1], nblocks=blocks[2],
                                                 ymax1=ymax1_group, xmax1=xmax1_group, bilinear=True)
                 # uint16 is preferrable, but suite2p default seems like int16, and other files are in int16
