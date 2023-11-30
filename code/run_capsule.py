@@ -16,11 +16,10 @@ def decrosstalk_roim(oeid, paired_oeid, input_dir, output_dir):
     logging.info(f"Output directory, {output_dir}")
     logging.info(f"Ophys experiment ID pairs, {oeid}, {paired_oeid}")
     output_dir = output_dir / oeid
-    oeid_pj = list(input_dir.glob(f"{oeid}_processing.json"))[0]
     oeid_mt = input_dir / f"{oeid}_motion_transform.csv"
     paired_reg_full_fn = list(input_dir.glob(f"{paired_oeid}_registered_to_pair.h5"))[0]
     shutil.copy(oeid_mt, output_dir)
-    shutil.copy(oeid_pj, output_dir / "processing.json")
+    shutil.copy(next(input_dir.glob(f"processing.json")), output_dir / "processing.json")
     paired_reg_emf_fn = list(
         input_dir.glob(f"{paired_oeid}_registered_to_pair_episodic_mean_fov.h5")
     )[0]
@@ -81,19 +80,19 @@ def decrosstalk_roim(oeid, paired_oeid, input_dir, output_dir):
     # remove the paired cache when finished
 
 
-def prepare_cached_paired_plane_movies(oeid1, oeid2, input_dir):
+def prepare_cached_paired_plane_movies(oeid1, oeid2, input_dir, non_rigid=True):
     h5_file = input_dir / f"{oeid1}.h5"
     oeid_mt = input_dir / f"{oeid2}_motion_transform.csv"
     transform_df = pd.read_csv(oeid_mt)
-    return ppr.paired_plane_cached_movie(h5_file, transform_df)
+    return ppr.paired_plane_cached_movie(h5_file, transform_df, non_rigid=non_rigid)
 
 
 def check_non_rigid_registration(input_dir, oeid):
     """check processing json to see if non-rigid registration was run"""
-    oeid_pj = list(input_dir.glob(f"{oeid}_processing.json"))[0]
-    with open(oeid_pj, "r") as f:
+    processing_json = next(input_dir.glob("processing.json"))
+    with open(processing_json, "r") as f:
         pj = json.load(f)
-    if "nonrigid" in pj["data_processes"][0]["parameters"]["nonrigid"]:
+    if pj["data_processes"][0]["parameters"].get('nonrigid', False):
         return True
     else:
         return False
