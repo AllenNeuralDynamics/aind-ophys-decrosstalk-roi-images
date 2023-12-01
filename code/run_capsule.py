@@ -163,8 +163,8 @@ def run():
     ppr.episodic_mean_fov(oeid1_paired_reg, output_dir / oeid1)
     ppr.episodic_mean_fov(oeid2_paired_reg, output_dir / oeid2)
     # create EMF of the self registered movies
-    ppr.episodic_mean_fov(oeid1_input_dir / f"{oeid1}_registered.h5"
-    ppr.episodic_mean_fov(oeid2_input_dir / f"{oeid2}_registered.h5"
+    ppr.episodic_mean_fov(oeid1_input_dir / f"{oeid1}_registered.h5")
+    ppr.episodic_mean_fov(oeid2_input_dir / f"{oeid2}_registered.h5")
     logging.info(f"Creating movie...")
     # run decrosstalk
     decrosstalk_roim(oeid1, oeid2, oeid1_input_dir, output_dir)
