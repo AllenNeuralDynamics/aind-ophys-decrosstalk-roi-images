@@ -6,10 +6,47 @@ import shutil
 import numpy as np
 import paired_plane_registration as ppr
 import decrosstalk_roi_image as dri
-import pandas as pd
 import shutil
 import json
+from aind_data_schema import Processing
+from aind_data_schema.processing import DataProcess
+from typing import Union
+from datetime import datetime as dt
 
+def write_output_metadata(prefix: str, metadata: dict, input_fp: Union[str, Path],
+                          output_fp: Union[str, Path], url: str) -> None:
+    """Writes output metadata to plane processing.json
+
+    Parameters
+    ----------
+    prefix: str
+        what to name the processing file
+    metadata: dict
+        parameters from suite2p motion correction
+    input_fp: str
+        path to data input
+    output_fp: str
+        path to data output
+    url: str
+        url to code repository
+    """
+    processing = Processing(
+        data_processes=[
+            DataProcess(
+                name="Video motion correction",
+                version="0.0.1",
+                start_date_time=dt.now(),  # TODO: Add actual dt
+                end_date_time=dt.now(),  # TODO: Add actual dt
+                input_location=input_fp,
+                output_location=output_fp,
+                code_url=(url),
+                parameters=metadata,
+            )
+        ],
+    )
+    processing.write_standard_file( prefix=prefix,
+        output_directory=output_fp.name
+    )
 
 def decrosstalk_roim(oeid, paired_oeid, input_dir, output_dir):
     logging.info(f"Input directory, {input_dir}")
@@ -34,6 +71,8 @@ def decrosstalk_roim(oeid, paired_oeid, input_dir, output_dir):
     ) = dri.decrosstalk_roi_image_from_episodic_mean_fov(oeid, paired_reg_emf_fn, input_dir.parent)
     alpha = np.mean(alpha_list)
     beta = np.mean(beta_list)
+    metadata = {'alpha_list': alpha_list, 'beta_list': beta_list, 'mean_norm_mi_list': mean_norm_mi_list, 'alpha_mean': alpha, 'beta_mean': beta}
+    
 
     ## To reduce RAM usage, you can get/save the decrosstalk_data in chunks:
     chunk_size = 5000  # num of frames in each chunk
@@ -45,6 +84,7 @@ def decrosstalk_roim(oeid, paired_oeid, input_dir, output_dir):
     end_frames = np.append(start_frames[1:], data_length)
     assert end_frames[-1] == data_length
     decrosstalk_fn = output_dir / f"{oeid}_decrosstalk.h5"
+    write_output_metadata(prefix= f'{oeid}_decrosstalk', metadata=metadata, input_fp=paired_reg_full_fn, output_fp=decrosstalk_fn, url='}')
 
     # generate the decrosstalk movie with alpha and beta values calculated above using the full paired registered movie
     chunk_no = 0
