@@ -104,7 +104,7 @@ def decrosstalk_roi_image_from_episodic_mean_fov(
     """
 
     # Assign start frames for each epoch
-    signal_fn = input_dir / f"{oeid}_registered_mean_fov.h5"
+    signal_fn = Path("../results") / oeid / f"{oeid}_registered_episodic_mean_fov.h5"
     with h5py.File(signal_fn, "r") as f:
         data_length = f["data"].shape[0]
     start_frames = range(data_length)
@@ -184,7 +184,7 @@ def decrosstalk_roi_image_single_pair_from_episodic_mean_fov(
     mean_norm_mi_values : np.array
         mean normalized mutual information values
     """
-    signal_fn = input_dir / f"{oeid}_registered_episodic_mean_fov.h5"
+    Path("../results") / oeid / f"{oeid}_registered_episodic_mean_fov.h5"
     start_frame = 1
     with h5py.File(signal_fn, "r") as f:
         signal_mean = f["data"][start_frame : start_frame + 1].mean(axis=0)

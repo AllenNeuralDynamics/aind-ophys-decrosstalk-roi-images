@@ -12,6 +12,7 @@ from aind_data_schema import Processing
 from aind_data_schema.processing import DataProcess
 from typing import Union
 from datetime import datetime as dt
+import sys
 
 def write_output_metadata(prefix: str, metadata: dict, input_fp: Union[str, Path],
                           output_fp: Union[str, Path], url: str) -> None:
@@ -149,12 +150,15 @@ def run():
     oeid2_input_dir = next(experiment_dirs)
     oeid1 = oeid1_input_dir.name 
     oeid2 = oeid2_input_dir.name
+    print(oeid1, oeid2)
     logging.info(f"Processing pairs, Pair_1, {oeid1}, Pair_2, {oeid2}")
     logging.info(f"Running paired plane registration...")
     non_rigid = check_non_rigid_registration(oeid1_input_dir, oeid1)
     # create cached registered to pair movie for each pair
     oeid1_paired_reg = prepare_cached_paired_plane_movies(oeid1, oeid2, oeid1_input_dir, non_rigid=non_rigid)
     oeid2_paired_reg = prepare_cached_paired_plane_movies(oeid2, oeid1, oeid2_input_dir, non_rigid=non_rigid)
+    #oeid1_paired_reg = "/scratch/1098444819_registered_to_pair.h5"
+    #oeid2_paired_reg = "/scratch/1098444821_registered_to_pair.h5"
     results_dir_oeid1 = output_dir / oeid1
     results_dir_oeid2 = output_dir / oeid2
     results_dir_oeid1.mkdir(exist_ok=True)
@@ -163,8 +167,8 @@ def run():
     ppr.episodic_mean_fov(oeid1_paired_reg, output_dir / oeid1)
     ppr.episodic_mean_fov(oeid2_paired_reg, output_dir / oeid2)
     # create EMF of the self registered movies
-    ppr.episodic_mean_fov(oeid1_input_dir / f"{oeid1}_registered.h5")
-    ppr.episodic_mean_fov(oeid2_input_dir / f"{oeid2}_registered.h5")
+    ppr.episodic_mean_fov(oeid1_input_dir / f"{oeid1}_registered.h5", output_dir / oeid1)
+    ppr.episodic_mean_fov(oeid2_input_dir / f"{oeid2}_registered.h5", output_dir / oeid2)
     logging.info(f"Creating movie...")
     # run decrosstalk
     decrosstalk_roim(oeid1, oeid2, oeid1_input_dir, output_dir)
