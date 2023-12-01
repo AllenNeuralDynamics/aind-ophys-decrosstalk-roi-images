@@ -235,18 +235,17 @@ def paired_plane_cached_movie(
 
             # save r_frames
             temp_path = tmp_dir / f'{h5_file.name.split(".")[0]}_registered_to_pair.h5'
-            with h5py.File(temp_path, "w") as f:
-                if f["data"].shape[0] == 0:
-                    f.create_dataset(
+            with h5py.File(temp_path, "a") as cache_f:
+                if "data" not in cache_f.keys():
+                    cache_f.create_dataset(
                         "data",
                         (data_length, 512, 512),
-                        maxshape=(chunk_size, 512, 512),
-                        chunk=(1000, 512, 512),
+                        maxshape=(None, 512, 512),
+                        chunks=(1000, 512, 512),
                     )
                 else:
-                    with h5py.File(temp_path, "w") as f:
-                        f["data"].resize((f["data"].shape[0] + r_frames.shape[0]), axis=0)
-                        f["data"][start_frame:end_frame] = r_frames
+                    cache_f["data"].resize((f["data"].shape[0] + r_frames.shape[0]), axis=0)
+                    cache_f["data"][start_frame:end_frame] = r_frames
     return temp_path
 
 
