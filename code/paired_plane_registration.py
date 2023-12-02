@@ -6,7 +6,7 @@ import h5py
 from suite2p.registration import nonrigid
 import shutil
 
-# NOTE: currently this module works in the Session level, someone may want to calculat per 
+# NOTE: currently this module works in the Session level, someone may want to calculat per
 # experiment
 # TODO: implement per experiment level
 
@@ -54,8 +54,8 @@ def generate_mean_episodic_fov_pairings_registered_frames(
     num_frames_to_avg=1000,
     non_rigid=True,
 ):
-    """Generate mean episodic FOVs registered to the paired experiment for both experiments in the 
-    pair. Create a full paired registered movie in a temp directory to get torn down at end of 
+    """Generate mean episodic FOVs registered to the paired experiment for both experiments in the
+    pair. Create a full paired registered movie in a temp directory to get torn down at end of
     capsule processing
 
     Parameters
@@ -99,7 +99,7 @@ def generate_mean_episodic_fov_pairings_registered_frames(
     )
 
     # Not all the experiments have general_info_for_ophys_experiment_id (e.g., pilot data)
-    # But since this is about paired plane registration, they all must have 
+    # But since this is about paired plane registration, they all must have
     # motion_corrected_movie_filepath
 
     for k in paired_plane_data.keys():
@@ -173,7 +173,7 @@ def paired_plane_cached_movie(
     h5_file : Path
         movie path to the non-motion corrected movie
     reg_df : pandas.DataFrame
-        registration DataFrame (from the csv file) for the pair associated with the non-motion 
+        registration DataFrame (from the csv file) for the pair associated with the non-motion
         corrected movie
     save_path : Path, optional
         path to save transformed h5 file, by default None
@@ -206,7 +206,7 @@ def paired_plane_cached_movie(
         assert data_length == len(y_shifts) == len(x_shifts)
         for start_frame, end_frame in zip(start_frames, end_frames):
             r_frames = np.zeros_like(f["data"][start_frame:end_frame])
-            frame_group = f['data'][start_frame:end_frame]
+            frame_group = f["data"][start_frame:end_frame]
             x_shift_group = x_shifts[start_frame:end_frame]
             y_shift_group = y_shifts[start_frame:end_frame]
             xmax1_group = xmax1[start_frame:end_frame]
@@ -225,9 +225,9 @@ def paired_plane_cached_movie(
                     xmax1=xmax1_group,
                     bilinear=True,
                 )
-                # uint16 is preferrable, but suite2p default seems like int16, and other files are 
+                # uint16 is preferrable, but suite2p default seems like int16, and other files are
                 # in int16
-                # Suite2p codes also need to be changed to work with uint16 (e.g., using 
+                # Suite2p codes also need to be changed to work with uint16 (e.g., using
                 # nonrigid_uint16 branch)
                 # njit pre-defined data type
                 # TODO: change all processing into uint16 in the future
