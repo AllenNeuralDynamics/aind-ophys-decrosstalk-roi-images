@@ -49,7 +49,7 @@ def get_motion_correction_crop_xy_range(oeid, input_dir):
         Lists of y range and x range, [start, end] pixel index
     """
     # TODO: validate in case where max < 0 or min > 0 (if there exists an example)
-    suite2p_rigid_motion_transform_csv = input_dir / f"{oeid}_motion_transform.csv"
+    suite2p_rigid_motion_transform_csv = input_dir / oeid / f"{oeid}_motion_transform.csv"
     motion_df = pd.read_csv(
         suite2p_rigid_motion_transform_csv
     )  # this is suite2p rigid motion transform csv file
@@ -184,7 +184,7 @@ def decrosstalk_roi_image_single_pair_from_episodic_mean_fov(
     mean_norm_mi_values : np.array
         mean normalized mutual information values
     """
-    Path("../results") / oeid / f"{oeid}_registered_episodic_mean_fov.h5"
+    signal_fn = Path("../results") / oeid / f"{oeid}_registered_episodic_mean_fov.h5"
     start_frame = 1
     with h5py.File(signal_fn, "r") as f:
         signal_mean = f["data"][start_frame : start_frame + 1].mean(axis=0)

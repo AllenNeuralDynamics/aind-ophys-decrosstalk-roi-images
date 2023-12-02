@@ -85,14 +85,14 @@ def decrosstalk_roim(oeid, paired_oeid, input_dir, output_dir):
     end_frames = np.append(start_frames[1:], data_length)
     assert end_frames[-1] == data_length
     decrosstalk_fn = output_dir / f"{oeid}_decrosstalk.h5"
-    write_output_metadata(prefix= f'{oeid}_decrosstalk', metadata=metadata, input_fp=paired_reg_full_fn, output_fp=decrosstalk_fn, url='}')
+    #write_output_metadata(prefix= f'{oeid}_decrosstalk', metadata=metadata, input_fp=paired_reg_full_fn, output_fp=decrosstalk_fn, url='}')
 
     # generate the decrosstalk movie with alpha and beta values calculated above using the full paired registered movie
     chunk_no = 0
     for start_frame, end_frame in zip(start_frames, end_frames):
         with h5.File(paired_reg_full_fn, "r") as f:
             paired_data = f["data"][start_frame:end_frame]
-            assert paired_data.shape[0] == end_frame[-1]
+            #assert paired_data.shape[0] == end_frame[-1]
         with h5.File(input_dir / f"{oeid}_registered.h5", "r") as f:
             signal_data = f["data"][start_frame:end_frame]
         recon_signal_data = np.zeros_like(signal_data)
@@ -118,7 +118,7 @@ def decrosstalk_roim(oeid, paired_oeid, input_dir, output_dir):
                 f["data"].resize((f["data"].shape[0] + recon_signal_data.shape[0]), axis=0)
                 f["data"][start_frame:end_frame] = recon_signal_data
         chunk_no += 1
-
+    return decrosstalk_fn
     # remove the paired cache when finished
 
 
@@ -171,10 +171,13 @@ def run():
     ppr.episodic_mean_fov(oeid2_input_dir / f"{oeid2}_registered.h5", output_dir / oeid2)
     logging.info(f"Creating movie...")
     # run decrosstalk
-    decrosstalk_roim(oeid1, oeid2, oeid1_input_dir, output_dir)
-    decrosstalk_roim(oeid2, oeid1, oeid2_input_dir, output_dir)
-    shutil.rmtree(Path("../scratch/") / f"{oeid1}_registered_to_pair.h5")
-    shutil.rmtree(Path("../scratch/") / f"{oeid2}_registered_to_pair.h5")
+    decrosstalk_oeid1 = decrosstalk_roim(oeid1, oeid2, oeid1_input_dir, output_dir)
+    decrosstalk_oeid2 = decrosstalk_roim(oeid2, oeid1, oeid2_input_dir, output_dir)
+    print("unlinking paired registered flies")
+    ppr.episodic_mean_fov(decrosstalk_oeid1, output_dir /oeid1)
+    ppr.episodic_mean_fov(decrosstalk_oeid2, output_dir / oeid2)
+    (Path("../scratch/") / f"{oeid1}_registered_to_pair.h5").unlink()
+    (Path("../scratch/") / f"{oeid2}_registered_to_pair.h5").unlink()
 
 
 if __name__ == "__main__":
