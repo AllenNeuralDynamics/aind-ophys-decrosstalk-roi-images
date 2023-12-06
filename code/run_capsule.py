@@ -142,7 +142,7 @@ def check_non_rigid_registration(input_dir, oeid):
     processing_json = next(input_dir.glob("processing.json"))
     with open(processing_json, "r") as f:
         pj = json.load(f)
-    if pj['processing_pipeline']["data_processes"][0]["parameters"].get("nonrigid", False):
+    if pj["data_processes"][0]["parameters"].get("nonrigid", False):
         return True
     else:
         return False
