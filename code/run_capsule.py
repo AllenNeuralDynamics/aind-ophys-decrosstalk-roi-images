@@ -183,15 +183,12 @@ def run_decrosstalk(input_dir: Path, output_dir: Path, oeid: str, paired_oeid: s
     logging.info(f"Running paired plane registration...")
     non_rigid = check_non_rigid_registration(input_dir, oeid)
     # create cached registered to pair movie for each pair
-    paired_reg = prepare_cached_paired_plane_movies(
-        oeid, paired_oeid, input_dir, non_rigid=non_rigid
-    )
     results_dir = output_dir / oeid
     results_dir.mkdir(exist_ok=True)
     results_dir = output_dir / oeid / "decrosstalk"
     results_dir.mkdir(exist_ok=True)
     # create the EMF of the registered to pair movie from cache
-    ppr.episodic_mean_fov(paired_reg, results_dir)
+    
     # create EMF of the self registered movies
     ppr.episodic_mean_fov(input_dir / f"{oeid}_registered.h5", results_dir)
     logging.info(f"Creating movie...")
@@ -211,5 +208,13 @@ if __name__ == "__main__":
     oeid2_input_dir = next(experiment_dirs)
     oeid1 = oeid1_input_dir.name
     oeid2 = oeid2_input_dir.name
+    paired_reg_oeid1 = prepare_cached_paired_plane_movies(
+        oeid1, oeid2, input_dir, non_rigid=non_rigid
+    )
+    ppr.episodic_mean_fov(paired_reg_oeid1, results_dir)
+    paired_reg_oeid2 = prepare_cached_paired_plane_movies(
+        oeid2, oeid1, input_dir, non_rigid=non_rigid
+    )
+    ppr.episodic_mean_fov(paired_reg_oeid2, results_dir)
     run_decrosstalk(oeid1_input_dir, output_dir, oeid1, oeid2)
     run_decrosstalk(oeid2_input_dir, output_dir, oeid2, oeid1)
