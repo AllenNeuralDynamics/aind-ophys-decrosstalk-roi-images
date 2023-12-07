@@ -142,7 +142,7 @@ def check_non_rigid_registration(input_dir, oeid):
     processing_json = next(input_dir.glob("processing.json"))
     with open(processing_json, "r") as f:
         pj = json.load(f)
-    if pj['processing_pipeline']["data_processes"][0]["parameters"].get("nonrigid", False):
+    if pj['processing_pipeline']["data_processes"][0]["parameters"]['suite2p_args'].get("nonrigid", False):
         return True
     else:
         return False
@@ -152,7 +152,8 @@ def run():
     """basic run function"""
     input_dir = Path("../data/").resolve()
     output_dir = Path("../results/").resolve()
-    experiment_dirs = input_dir.glob("*/*")
+    #experiment_dirs = input_dir.glob("*/*")
+    experiment_dirs = input_dir.glob("*")
     oeid1_input_dir = next(experiment_dirs)
     oeid2_input_dir = next(experiment_dirs)
     oeid1 = oeid1_input_dir.name
