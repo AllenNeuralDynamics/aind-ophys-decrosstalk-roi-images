@@ -9,21 +9,19 @@ import decrosstalk_roi_image as dri
 import shutil
 import json
 from aind_data_schema import Processing
-from aind_data_schema.processing import DataProcess
+from aind_data_schema.processing import DataProcess, ProcessName, PipelineProcess
 from typing import Union
 from datetime import datetime as dt
 import sys
 
 
 def write_output_metadata(
-    prefix: str, metadata: dict, input_fp: Union[str, Path], output_fp: Union[str, Path], url: str
+   metadata: dict, input_fp: Union[str, Path], output_fp: Union[str, Path], url: str
 ) -> None:
     """Writes output metadata to plane processing.json
 
     Parameters
     ----------
-    prefix: str
-        what to name the processing file
     metadata: dict
         parameters from suite2p motion correction
     input_fp: str
@@ -34,21 +32,35 @@ def write_output_metadata(
         url to code repository
     """
     processing = Processing(
-        data_processes=[
-            DataProcess(
-                name="Video motion correction",
-                version="0.0.1",
-                start_date_time=dt.now(),  # TODO: Add actual dt
-                end_date_time=dt.now(),  # TODO: Add actual dt
-                input_location=input_fp,
-                output_location=output_fp,
-                code_url=(url),
-                parameters=metadata,
-            )
-        ],
+        processing_pipeline=PipelineProcess(
+            processor_full_name = "Multplane Ophys Processing Pipeline",
+            pipeline_url = "https://codeocean.allenneuraldynamics.org/capsule/5472403/tree",
+            pipeline_version="0.1.0",
+            data_processes=[
+                DataProcess(
+                    name=ProcessName.VIDEO_PLANE_DECROSSTALK,
+                    software_version="0.1.0",
+                    start_date_time=dt.now(),  # TODO: Add actual dt
+                    end_date_time=dt.now(),  # TODO: Add actual dt
+                    input_location=input_fp,
+                    output_location=output_fp,
+                    code_url=(
+                        "https://github.com/AllenNeuralDynamics/"
+                        "aind-ophys-motion-correction/tree/main/code"
+                    ),
+                    parameters=metadata,
+                )
+            ]
+        )
     )
-    processing.write_standard_file(prefix=prefix, output_directory=output_fp.name)
-
+    with open(output_fp.parent / "processing.json", "r") as f:
+        proc_data = json.load(f)
+    processing.write_standard_file(output_directory=Path(output_fp.parent))
+    with open(output_fp.parent / "processing.json", "r") as f:
+        dct_data = json.load(f)
+    proc_data['processing_pipeline']['data_processes'].append(dct_data['processing_pipeline']['data_processes'][0])
+    with open(output_fp.parent / "processing.json", "w") as f:
+        json.dump(proc_data, f, indent=4)
 
 def decrosstalk_roim(oeid, paired_oeid, input_dir, output_dir):
     logging.info(f"Input directory, {input_dir}")
@@ -81,6 +93,7 @@ def decrosstalk_roim(oeid, paired_oeid, input_dir, output_dir):
         "mean_norm_mi_list": mean_norm_mi_list,
         "alpha_mean": alpha,
         "beta_mean": beta,
+        "paired_emf": str(paired_reg_emf_fn),
     }
 
     ## To reduce RAM usage, you can get/save the decrosstalk_data in chunks:
@@ -126,7 +139,7 @@ def decrosstalk_roim(oeid, paired_oeid, input_dir, output_dir):
                 f["data"].resize((f["data"].shape[0] + recon_signal_data.shape[0]), axis=0)
                 f["data"][start_frame:end_frame] = recon_signal_data
         chunk_no += 1
-    return decrosstalk_fn
+    write_output_metadata(metadata, input_dir / oeid / f"{oeid}_registered.h5", decrosstalk_fn)
     # remove the paired cache when finished
 
 
@@ -169,8 +182,6 @@ def run():
     oeid2_paired_reg = prepare_cached_paired_plane_movies(
         oeid2, oeid1, oeid2_input_dir, non_rigid=non_rigid
     )
-    # oeid1_paired_reg = "/scratch/1098444819_registered_to_pair.h5"
-    # oeid2_paired_reg = "/scratch/1098444821_registered_to_pair.h5"
     results_dir_oeid1 = output_dir / oeid1
     results_dir_oeid2 = output_dir / oeid2
     results_dir_oeid1.mkdir(exist_ok=True)
