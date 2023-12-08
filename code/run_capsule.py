@@ -69,7 +69,6 @@ def decrosstalk_roi_movie(oeid, paired_oeid, input_dir, output_dir):
     logging.info(f"Input directory, {input_dir}")
     logging.info(f"Output directory, {output_dir}")
     logging.info(f"Ophys experiment ID pairs, {oeid}, {paired_oeid}")
-    output_dir = output_dir / oeid
     oeid_mt = input_dir / f"{oeid}_motion_transform.csv"
     paired_reg_full_fn = next(Path("../scratch").glob(f"{paired_oeid}_registered_to_pair.h5"))
     print(paired_reg_full_fn)
