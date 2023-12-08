@@ -72,6 +72,9 @@ def decrosstalk_roi_movie(oeid, paired_oeid, input_dir, output_dir):
     output_dir = output_dir / oeid
     oeid_mt = input_dir / f"{oeid}_motion_transform.csv"
     paired_reg_full_fn = next(Path("../scratch").glob(f"{paired_oeid}_registered_to_pair.h5"))
+    print(paired_reg_full_fn)
+    print(output_dir)
+    ppr.episodic_mean_fov(paired_reg_full_fn, output_dir)
     shutil.copy(oeid_mt, output_dir)
     shutil.copy(next(input_dir.glob(f"processing.json")), output_dir / "processing.json")
     print(Path(output_dir.parent / paired_oeid))
@@ -181,7 +184,6 @@ def run_decrosstalk(input_dir: Path, output_dir: Path, oeid: str, paired_oeid: s
         ophys experiment id of paired experiment
     """
     logging.info(f"Running paired plane registration...")
-    non_rigid = check_non_rigid_registration(input_dir, oeid)
     # create cached registered to pair movie for each pair
     results_dir = output_dir / oeid
     results_dir.mkdir(exist_ok=True)
@@ -208,13 +210,12 @@ if __name__ == "__main__":
     oeid2_input_dir = next(experiment_dirs)
     oeid1 = oeid1_input_dir.name
     oeid2 = oeid2_input_dir.name
+    non_rigid = check_non_rigid_registration(oeid1_input_dir, oeid1)
     paired_reg_oeid1 = prepare_cached_paired_plane_movies(
-        oeid1, oeid2, input_dir, non_rigid=non_rigid
+        oeid1, oeid2, oeid1_input_dir, non_rigid=non_rigid
     )
-    ppr.episodic_mean_fov(paired_reg_oeid1, results_dir)
     paired_reg_oeid2 = prepare_cached_paired_plane_movies(
-        oeid2, oeid1, input_dir, non_rigid=non_rigid
+        oeid2, oeid1, oeid2_input_dir, non_rigid=non_rigid
     )
-    ppr.episodic_mean_fov(paired_reg_oeid2, results_dir)
     run_decrosstalk(oeid1_input_dir, output_dir, oeid1, oeid2)
     run_decrosstalk(oeid2_input_dir, output_dir, oeid2, oeid1)
