@@ -142,7 +142,6 @@ def generate_mean_episodic_fov_pairings_registered_frames(
                 epoch_registered = epoch_data.copy()
                 for frame, dy, dx in zip(epoch_registered, y, x):
                     frame[:] = shift_frame(frame=frame, dy=dy, dx=dx)
-                import pdb;pdb.set_trace()
                 if "inonrigid_x" in paired_plane_data[k]["paired_motion_df"]:
                     epoch_registered = nonrigid.transform_data(
                         epoch_registered,
@@ -215,7 +214,7 @@ def paired_plane_cached_movie(
             for frame_index, (frame, dy, dx) in enumerate(
                 zip(frame_group, y_shift_group, x_shift_group)
             ):
-                r_frames[frame_index] = shift_frame(frame=frame, dy=dy, dx=dx)
+                r_frames[:] = shift_frame(frame=frame_index, dy=dy, dx=dx)
             if non_rigid:
                 r_frames = nonrigid.transform_data(
                     r_frames,

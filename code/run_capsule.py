@@ -210,11 +210,11 @@ if __name__ == "__main__":
     oeid1 = oeid1_input_dir.name
     oeid2 = oeid2_input_dir.name
     non_rigid = check_non_rigid_registration(oeid1_input_dir, oeid1)
-    paired_reg_oeid1 = prepare_cached_paired_plane_movies(
-        oeid1, oeid2, oeid1_input_dir, non_rigid=non_rigid
-    )
-    paired_reg_oeid2 = prepare_cached_paired_plane_movies(
-        oeid2, oeid1, oeid2_input_dir, non_rigid=non_rigid
-    )
+    # paired_reg_oeid1 = prepare_cached_paired_plane_movies(
+    #     oeid1, oeid2, oeid1_input_dir, non_rigid=non_rigid
+    # )
+    # paired_reg_oeid2 = prepare_cached_paired_plane_movies(
+    #     oeid2, oeid1, oeid2_input_dir, non_rigid=non_rigid
+    # )
     run_decrosstalk(oeid1_input_dir, output_dir, oeid1, oeid2)
     run_decrosstalk(oeid2_input_dir, output_dir, oeid2, oeid1)
