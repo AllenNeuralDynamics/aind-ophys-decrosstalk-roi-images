@@ -92,6 +92,7 @@ def decrosstalk_roi_movie(oeid, paired_oeid, input_dir, output_dir):
     ) = dri.decrosstalk_roi_image_from_episodic_mean_fov(oeid, paired_reg_emf_fn, input_dir.parent)
     alpha = np.mean(alpha_list)
     beta = np.mean(beta_list)
+    print(alpha)
     metadata = {
         "alpha_list": alpha_list,
         "beta_list": beta_list,
