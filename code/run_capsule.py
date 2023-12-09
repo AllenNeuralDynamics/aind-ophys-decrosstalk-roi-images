@@ -47,7 +47,7 @@ def write_output_metadata(
                     code_url=(
                         url
                     ),
-                    parameters=[metadata],
+                    parameters=metadata,
                 )
             ],
         )
@@ -141,7 +141,7 @@ def decrosstalk_roi_movie(oeid, paired_oeid, input_dir, output_dir):
                 f["data"].resize((f["data"].shape[0] + recon_signal_data.shape[0]), axis=0)
                 f["data"][start_frame:end_frame] = recon_signal_data.astype(dtype=np.int16)
         chunk_no += 1
-    #output_metadata(metadata, input_dir / oeid / f"{oeid}_registered.h5", decrosstalk_fn, "https://github.com/AllenNeuralDynamics/aind-ophys-decrosstalk-roi-images/tree/development")
+    write_output_metadata(metadata, input_dir / oeid / f"{oeid}_registered.h5", decrosstalk_fn, "https://github.com/AllenNeuralDynamics/aind-ophys-decrosstalk-roi-images/tree/development")
     return decrosstalk_fn
 
 def prepare_cached_paired_plane_movies(oeid1, oeid2, input_dir, non_rigid=True):

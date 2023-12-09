@@ -243,7 +243,7 @@ def decrosstalk_roi_image_single_pair_from_episodic_mean_fov(
             ab_pair.append([alpha, beta])
 
     alpha, beta = ab_pair[np.argmin(mean_norm_mi_values)]
-    return alpha, beta, np.array(mean_norm_mi_values)
+    return alpha, beta, np.array(mean_norm_mi_values).tolist()
 
 
 def get_signal_paired_top_masks(
