@@ -241,6 +241,8 @@ def paired_plane_cached_movie(
                         maxshape=(None, 512, 512),
                         chunks=(1000, 512, 512),
                     )
+                    cache_f["data"].resize((f["data"].shape[0] + r_frames.shape[0]), axis=0)
+                    cache_f["data"][start_frame:end_frame] = r_frames
                 else:
                     cache_f["data"].resize((f["data"].shape[0] + r_frames.shape[0]), axis=0)
                     cache_f["data"][start_frame:end_frame] = r_frames
