@@ -47,7 +47,7 @@ def write_output_metadata(
                     code_url=(
                         url
                     ),
-                    parameters=metadata,
+                    parameters=[metadata],
                 )
             ],
         )
@@ -157,8 +157,8 @@ def check_non_rigid_registration(input_dir, oeid):
     processing_json = next(input_dir.glob("processing.json"))
     with open(processing_json, "r") as f:
         pj = json.load(f)
-    if pj['pipeline_processes']["data_processes"][0]["parameters"]["suite2p_args"].get(
-    #if pj["processing_pipeline"]["data_processes"][0]["parameters"]["suite2p_args"].get(
+    #if pj["data_processes"][0]["parameters"]["suite2p_args"].get(
+    if pj["processing_pipeline"]["data_processes"][0]["parameters"]["suite2p_args"].get(
         "nonrigid", False
     ):
         return True
