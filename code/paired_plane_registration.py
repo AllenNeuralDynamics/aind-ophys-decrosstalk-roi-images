@@ -211,10 +211,8 @@ def paired_plane_cached_movie(
             y_shift_group = y_shifts[start_frame:end_frame]
             xmax1_group = xmax1[start_frame:end_frame]
             ymax1_group = ymax1[start_frame:end_frame]
-            for frame_index, (frame, dy, dx) in enumerate(
-                zip(frame_group, y_shift_group, x_shift_group)
-            ):
-                r_frames[:] = shift_frame(frame=frame_index, dy=dy, dx=dx)
+            for frame_index, (frame, dy, dx) in enumerate(zip(frame_group, y_shift_group, x_shift_group)):
+                r_frames[frame_index] = shift_frame(frame=frame, dy=dy, dx=dx)
             if non_rigid:
                 r_frames = nonrigid.transform_data(
                     r_frames,
