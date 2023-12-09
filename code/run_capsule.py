@@ -191,8 +191,7 @@ def run_decrosstalk(input_dir: Path, output_dir: Path, oeid: str, paired_oeid: s
     # run decrosstalk
     decrosstalk = decrosstalk_roi_movie(oeid, paired_oeid, input_dir, output_dir)
     ppr.episodic_mean_fov(decrosstalk, output_dir)
-    print("unlinking paired registered flies")
-    (Path("../scratch/") / f"{oeid}_registered_to_pair.h5").unlink()
+    
 
 def make_output_dirs(oeid, output_dir):
 
@@ -226,3 +225,7 @@ if __name__ == "__main__":
     #ppr.episodic_mean_fov(Path("../scratch") / f"{oeid2}_registered_to_pair.h5", oeid2_output_dir)
     run_decrosstalk(oeid1_input_dir, oeid1_output_dir, oeid1, oeid2)
     run_decrosstalk(oeid2_input_dir, oeid2_output_dir, oeid2, oeid1)
+    print("unlinking paired registered flies")
+    (Path("../scratch/") / f"{oeid1}_registered_to_pair.h5").unlink()
+    print("unlinking paired registered flies")
+    (Path("../scratch/") / f"{oeid2}_registered_to_pair.h5").unlink()
