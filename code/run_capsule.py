@@ -207,8 +207,7 @@ def make_output_dirs(oeid, output_dir):
 if __name__ == "__main__":
     input_dir = Path("../data/").resolve()
     output_dir = Path("../results/").resolve()
-    experiment_dirs = input_dir.glob("*/*")
-    # experiment_dirs = input_dir.glob("*")
+    experiment_dirs = input_dir.glob("*/motion_correction/*")
     oeid1_input_dir = next(experiment_dirs)
     oeid2_input_dir = next(experiment_dirs)
     oeid1 = oeid1_input_dir.name
@@ -224,8 +223,6 @@ if __name__ == "__main__":
     )
     ppr.episodic_mean_fov(paired_reg_oeid1, oeid1_output_dir)
     ppr.episodic_mean_fov(paired_reg_oeid2, oeid2_output_dir)
-    # ppr.episodic_mean_fov(Path("../scratch") / f"{oeid1}_registered_to_pair.h5", oeid1_output_dir)
-    # ppr.episodic_mean_fov(Path("../scratch") / f"{oeid2}_registered_to_pair.h5", oeid2_output_dir)
     run_decrosstalk(oeid1_input_dir, oeid1_output_dir, oeid1, oeid2)
     run_decrosstalk(oeid2_input_dir, oeid2_output_dir, oeid2, oeid1)
     print("unlinking paired registered flies")
