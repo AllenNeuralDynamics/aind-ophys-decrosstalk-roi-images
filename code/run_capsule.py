@@ -214,7 +214,7 @@ def make_output_dirs(oeid, output_dir):
 if __name__ == "__main__":
     input_dir = Path("../data/").resolve()
     output_dir = Path("../results/").resolve()
-    experiment_dirs = input_dir.glob("*/motion_correction/*")
+    experiment_dirs = input_dir.glob("*/*")
     oeid1_input_dir = next(experiment_dirs)
     oeid2_input_dir = next(experiment_dirs)
     oeid1 = oeid1_input_dir.name
@@ -222,17 +222,17 @@ if __name__ == "__main__":
     oeid1_output_dir = make_output_dirs(oeid1, output_dir)
     oeid2_output_dir = make_output_dirs(oeid2, output_dir)
     non_rigid = check_non_rigid_registration(oeid1_input_dir, oeid1)
-    start_time_oeid1 = dt.now(tz.utc)
     paired_reg_oeid1 = prepare_cached_paired_plane_movies(
         oeid1, oeid2, oeid1_input_dir, non_rigid=non_rigid
     )
-    ppr.episodic_mean_fov(paired_reg_oeid1, oeid1_output_dir)
-    run_decrosstalk(oeid1_input_dir, oeid1_output_dir, oeid1, oeid2, start_time_oeid1)
-    start_time_oeid2 = dt.now(tz.utc)
-    paired_reg_oeid2 = prepare_cached_paired_plane_movies(
+     paired_reg_oeid2 = prepare_cached_paired_plane_movies(
         oeid2, oeid1, oeid2_input_dir, non_rigid=non_rigid
     )
+    ppr.episodic_mean_fov(paired_reg_oeid1, oeid1_output_dir)
+    start_time_oeid1 = dt.now(tz.utc)
+    run_decrosstalk(oeid1_input_dir, oeid1_output_dir, oeid1, oeid2, start_time_oeid1)
     ppr.episodic_mean_fov(paired_reg_oeid2, oeid2_output_dir)
+    start_time_oeid2 = dt.now(tz.utc)
     run_decrosstalk(oeid2_input_dir, oeid2_output_dir, oeid2, oeid1, start_time_oeid2)
     print("unlinking paired registered flies")
     (Path("../scratch/") / f"{oeid1}_registered_to_pair.h5").unlink()
