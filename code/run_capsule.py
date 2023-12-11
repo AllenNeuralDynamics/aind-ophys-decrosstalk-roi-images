@@ -44,9 +44,7 @@ def write_output_metadata(
                     end_date_time=dt.now(),  # TODO: Add actual dt
                     input_location=str(input_fp),
                     output_location=str(output_fp),
-                    code_url=(
-                        url
-                    ),
+                    code_url=(url),
                     parameters=metadata,
                 )
             ],
@@ -73,7 +71,7 @@ def decrosstalk_roi_movie(oeid, paired_oeid, input_dir, output_dir):
     print(output_dir)
     shutil.copy(oeid_mt, output_dir)
     shutil.copy(next(input_dir.glob(f"processing.json")), output_dir / "processing.json")
-    print(output_dir.parent.parent / paired_oeid/ "decrosstalk")
+    print(output_dir.parent.parent / paired_oeid / "decrosstalk")
     paired_reg_emf_fn = next(
         (output_dir.parent.parent / paired_oeid / "decrosstalk").glob(
             f"{paired_oeid}_registered_to_pair_episodic_mean_fov.h5"
@@ -141,8 +139,14 @@ def decrosstalk_roi_movie(oeid, paired_oeid, input_dir, output_dir):
                 f["data"].resize((f["data"].shape[0] + recon_signal_data.shape[0]), axis=0)
                 f["data"][start_frame:end_frame] = recon_signal_data.astype(dtype=np.int16)
         chunk_no += 1
-    write_output_metadata(metadata, input_dir / oeid / f"{oeid}_registered.h5", decrosstalk_fn, "https://github.com/AllenNeuralDynamics/aind-ophys-decrosstalk-roi-images/tree/development")
+    write_output_metadata(
+        metadata,
+        input_dir / oeid / f"{oeid}_registered.h5",
+        decrosstalk_fn,
+        "https://github.com/AllenNeuralDynamics/aind-ophys-decrosstalk-roi-images/tree/development",
+    )
     return decrosstalk_fn
+
 
 def prepare_cached_paired_plane_movies(oeid1, oeid2, input_dir, non_rigid=True):
     h5_file = input_dir / f"{oeid1}.h5"
@@ -156,7 +160,7 @@ def check_non_rigid_registration(input_dir, oeid):
     processing_json = next(input_dir.glob("processing.json"))
     with open(processing_json, "r") as f:
         pj = json.load(f)
-    #if pj["data_processes"][0]["parameters"]["suite2p_args"].get(
+    # if pj["data_processes"][0]["parameters"]["suite2p_args"].get(
     if pj["processing_pipeline"]["data_processes"][0]["parameters"]["suite2p_args"].get(
         "nonrigid", False
     ):
@@ -181,30 +185,30 @@ def run_decrosstalk(input_dir: Path, output_dir: Path, oeid: str, paired_oeid: s
     """
     logging.info(f"Running paired plane registration...")
     # create cached registered to pair movie for each pair
-    
+
     # create the EMF of the registered to pair movie from cache
-    
+
     # create EMF of the self registered movies
     ppr.episodic_mean_fov(input_dir / f"{oeid}_registered.h5", output_dir)
     logging.info(f"Creating movie...")
     # run decrosstalk
     decrosstalk = decrosstalk_roi_movie(oeid, paired_oeid, input_dir, output_dir)
     ppr.episodic_mean_fov(decrosstalk, output_dir)
-    
+
 
 def make_output_dirs(oeid, output_dir):
-
     results_dir = output_dir / oeid
     results_dir.mkdir(exist_ok=True)
     results_dir = output_dir / oeid / "decrosstalk"
     results_dir.mkdir(exist_ok=True)
     return results_dir
 
+
 if __name__ == "__main__":
     input_dir = Path("../data/").resolve()
     output_dir = Path("../results/").resolve()
     experiment_dirs = input_dir.glob("*/*")
-    #experiment_dirs = input_dir.glob("*")
+    # experiment_dirs = input_dir.glob("*")
     oeid1_input_dir = next(experiment_dirs)
     oeid2_input_dir = next(experiment_dirs)
     oeid1 = oeid1_input_dir.name
@@ -220,8 +224,8 @@ if __name__ == "__main__":
     )
     ppr.episodic_mean_fov(paired_reg_oeid1, oeid1_output_dir)
     ppr.episodic_mean_fov(paired_reg_oeid2, oeid2_output_dir)
-    #ppr.episodic_mean_fov(Path("../scratch") / f"{oeid1}_registered_to_pair.h5", oeid1_output_dir)
-    #ppr.episodic_mean_fov(Path("../scratch") / f"{oeid2}_registered_to_pair.h5", oeid2_output_dir)
+    # ppr.episodic_mean_fov(Path("../scratch") / f"{oeid1}_registered_to_pair.h5", oeid1_output_dir)
+    # ppr.episodic_mean_fov(Path("../scratch") / f"{oeid2}_registered_to_pair.h5", oeid2_output_dir)
     run_decrosstalk(oeid1_input_dir, oeid1_output_dir, oeid1, oeid2)
     run_decrosstalk(oeid2_input_dir, oeid2_output_dir, oeid2, oeid1)
     print("unlinking paired registered flies")
