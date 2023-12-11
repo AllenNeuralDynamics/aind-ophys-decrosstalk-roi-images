@@ -225,7 +225,7 @@ if __name__ == "__main__":
     paired_reg_oeid1 = prepare_cached_paired_plane_movies(
         oeid1, oeid2, oeid1_input_dir, non_rigid=non_rigid
     )
-     paired_reg_oeid2 = prepare_cached_paired_plane_movies(
+    paired_reg_oeid2 = prepare_cached_paired_plane_movies(
         oeid2, oeid1, oeid2_input_dir, non_rigid=non_rigid
     )
     ppr.episodic_mean_fov(paired_reg_oeid1, oeid1_output_dir)
