@@ -12,7 +12,6 @@ from aind_data_schema import Processing
 from aind_data_schema.processing import DataProcess, ProcessName, PipelineProcess
 from typing import Union
 from datetime import datetime as dt
-import sys
 
 
 def write_output_metadata(
