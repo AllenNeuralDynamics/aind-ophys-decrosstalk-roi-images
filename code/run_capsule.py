@@ -112,7 +112,6 @@ def decrosstalk_roi_movie(oeid, paired_oeid, input_dir, output_dir, start_time):
     end_frames = np.append(start_frames[1:], data_length)
     assert end_frames[-1] == data_length
     decrosstalk_fn = output_dir / f"{oeid}_decrosstalk.h5"
-    # write_output_metadata(prefix= f'{oeid}_decrosstalk', metadata=metadata, input_fp=paired_reg_full_fn, output_fp=decrosstalk_fn, url='}')
 
     # generate the decrosstalk movie with alpha and beta values calculated above using the full paired registered movie
     chunk_no = 0
@@ -175,7 +174,7 @@ def check_non_rigid_registration(input_dir, oeid):
         return False
 
 
-def run_decrosstalk(input_dir: Path, output_dir: Path, oeid: str, paired_oeid: str):
+def run_decrosstalk(input_dir: Path, output_dir: Path, oeid: str, paired_oeid: str, start_time: dt):
     """Runs paired plane registration and decrosstalk for a given pair of experiments
 
     Parameters
@@ -188,6 +187,8 @@ def run_decrosstalk(input_dir: Path, output_dir: Path, oeid: str, paired_oeid: s
         ophys experiment id
     paired_oeid: str
         ophys experiment id of paired experiment
+    start_time: dt
+        start time of decrosstalk processing
     """
     logging.info(f"Running paired plane registration...")
     # create cached registered to pair movie for each pair
@@ -198,7 +199,7 @@ def run_decrosstalk(input_dir: Path, output_dir: Path, oeid: str, paired_oeid: s
     ppr.episodic_mean_fov(input_dir / f"{oeid}_registered.h5", output_dir)
     logging.info(f"Creating movie...")
     # run decrosstalk
-    decrosstalk = decrosstalk_roi_movie(oeid, paired_oeid, input_dir, output_dir)
+    decrosstalk = decrosstalk_roi_movie(oeid, paired_oeid, input_dir, output_dir, start_time)
     ppr.episodic_mean_fov(decrosstalk, output_dir)
 
 
