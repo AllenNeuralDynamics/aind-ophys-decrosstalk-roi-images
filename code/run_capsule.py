@@ -213,7 +213,7 @@ def make_output_dirs(oeid, output_dir):
 if __name__ == "__main__":
     input_dir = Path("../data/").resolve()
     output_dir = Path("../results/").resolve()
-    experiment_dirs = input_dir.glob("*/motion_correction/*")
+    experiment_dirs = input_dir.glob("*/*")
     oeid1_input_dir = next(experiment_dirs)
     oeid2_input_dir = next(experiment_dirs)
     oeid1 = oeid1_input_dir.name
