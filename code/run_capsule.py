@@ -226,13 +226,13 @@ if __name__ == "__main__":
     paired_reg_oeid1 = prepare_cached_paired_plane_movies(
         oeid1, oeid2, oeid1_input_dir, non_rigid=non_rigid
     )
-    ppr.episodic_mean_fov(paired_reg_oeid2, oeid2_output_dir)
+    ppr.episodic_mean_fov(paired_reg_oeid1, oeid1_output_dir)
     run_decrosstalk(oeid1_input_dir, oeid1_output_dir, oeid1, oeid2, start_time_oeid1)
     start_time_oeid2 = dt.now(tz.utc)
     paired_reg_oeid2 = prepare_cached_paired_plane_movies(
         oeid2, oeid1, oeid2_input_dir, non_rigid=non_rigid
     )
-    ppr.episodic_mean_fov(paired_reg_oeid1, oeid1_output_dir)
+    ppr.episodic_mean_fov(paired_reg_oeid2, oeid2_output_dir)
     run_decrosstalk(oeid2_input_dir, oeid2_output_dir, oeid2, oeid1, start_time_oeid2)
     print("unlinking paired registered flies")
     (Path("../scratch/") / f"{oeid1}_registered_to_pair.h5").unlink()
