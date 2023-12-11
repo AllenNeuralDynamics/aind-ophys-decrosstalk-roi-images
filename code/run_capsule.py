@@ -12,10 +12,15 @@ from aind_data_schema import Processing
 from aind_data_schema.processing import DataProcess, ProcessName, PipelineProcess
 from typing import Union
 from datetime import datetime as dt
+from datetime import timezone as tz
 
 
 def write_output_metadata(
-    metadata: dict, input_fp: Union[str, Path], output_fp: Union[str, Path], url: str
+    metadata: dict,
+    input_fp: Union[str, Path],
+    output_fp: Union[str, Path],
+    url: str,
+    start_date_time: dt,
 ) -> None:
     """Writes output metadata to plane processing.json
 
@@ -39,8 +44,8 @@ def write_output_metadata(
                 DataProcess(
                     name=ProcessName.VIDEO_PLANE_DECROSSTALK,
                     software_version="0.1.0",
-                    start_date_time=dt.now(),  # TODO: Add actual dt
-                    end_date_time=dt.now(),  # TODO: Add actual dt
+                    start_date_time=start_date_time,  # TODO: Add actual dt
+                    end_date_time=dt.now(tz.utc),  # TODO: Add actual dt
                     input_location=str(input_fp),
                     output_location=str(output_fp),
                     code_url=(url),
@@ -61,7 +66,7 @@ def write_output_metadata(
         json.dump(proc_data, f, indent=4)
 
 
-def decrosstalk_roi_movie(oeid, paired_oeid, input_dir, output_dir):
+def decrosstalk_roi_movie(oeid, paired_oeid, input_dir, output_dir, start_time):
     logging.info(f"Input directory, {input_dir}")
     logging.info(f"Output directory, {output_dir}")
     logging.info(f"Ophys experiment ID pairs, {oeid}, {paired_oeid}")
@@ -143,6 +148,7 @@ def decrosstalk_roi_movie(oeid, paired_oeid, input_dir, output_dir):
         input_dir / oeid / f"{oeid}_registered.h5",
         decrosstalk_fn,
         "https://github.com/AllenNeuralDynamics/aind-ophys-decrosstalk-roi-images/tree/development",
+        start_time,
     )
     return decrosstalk_fn
 
@@ -214,16 +220,19 @@ if __name__ == "__main__":
     oeid1_output_dir = make_output_dirs(oeid1, output_dir)
     oeid2_output_dir = make_output_dirs(oeid2, output_dir)
     non_rigid = check_non_rigid_registration(oeid1_input_dir, oeid1)
+    start_time_oeid1 = dt.now(tz.utc)
     paired_reg_oeid1 = prepare_cached_paired_plane_movies(
         oeid1, oeid2, oeid1_input_dir, non_rigid=non_rigid
     )
+    start_time_oeid2 = dt.now(tz.utc)
     paired_reg_oeid2 = prepare_cached_paired_plane_movies(
         oeid2, oeid1, oeid2_input_dir, non_rigid=non_rigid
     )
     ppr.episodic_mean_fov(paired_reg_oeid1, oeid1_output_dir)
     ppr.episodic_mean_fov(paired_reg_oeid2, oeid2_output_dir)
-    run_decrosstalk(oeid1_input_dir, oeid1_output_dir, oeid1, oeid2)
-    run_decrosstalk(oeid2_input_dir, oeid2_output_dir, oeid2, oeid1)
+    run_decrosstalk(oeid1_input_dir, oeid1_output_dir, oeid1, oeid2, start_time_oeid1)
+    start_time_oeid2 = start_time_oeid2 - start_time_oeid1
+    run_decrosstalk(oeid2_input_dir, oeid2_output_dir, oeid2, oeid1, start_time_oeid2)
     print("unlinking paired registered flies")
     (Path("../scratch/") / f"{oeid1}_registered_to_pair.h5").unlink()
     print("unlinking paired registered flies")
