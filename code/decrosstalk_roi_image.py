@@ -119,6 +119,7 @@ def decrosstalk_roi_image_from_episodic_mean_fov(
             oeid,
             paired_reg_fn,
             input_dir,
+            start_frame,
             pixel_size,
             grid_interval=grid_interval,
             max_grid_val=max_grid_val,
@@ -149,6 +150,7 @@ def decrosstalk_roi_image_single_pair_from_episodic_mean_fov(
     oeid,
     paired_reg_fn,
     input_dir,
+    start_frame,
     pix_size,
     motion_buffer=5,
     grid_interval=0.01,
@@ -167,6 +169,8 @@ def decrosstalk_roi_image_single_pair_from_episodic_mean_fov(
         this parameter can be removed or replaced with paired_oeid
     input_dir: Path
         path to the input directory
+    start_frame: int
+        start frame of the mean images
     pix_size = float
         pixel size in um of imaging plane
     motion_buffer : int, optional
@@ -189,7 +193,6 @@ def decrosstalk_roi_image_single_pair_from_episodic_mean_fov(
     signal_fn = (
         Path("../results") / oeid / "decrosstalk" / f"{oeid}_registered_episodic_mean_fov.h5"
     )
-    start_frame = 1
     with h5py.File(signal_fn, "r") as f:
         signal_mean = f["data"][start_frame : start_frame + 1].mean(axis=0)
     with h5py.File(paired_reg_fn, "r") as f:
