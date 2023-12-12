@@ -132,7 +132,7 @@ def decrosstalk_roi_movie(oeid, paired_oeid, input_dir, output_dir, start_time):
             with h5.File(decrosstalk_fn, "w") as f:
                 f.create_dataset(
                     "data",
-                    data=recon_signal_data.astype(dtype=np.int16),
+                    data=recon_signal_data,
                     maxshape=(None, data_shape[1], data_shape[2]),
                 )
                 f.create_dataset("alpha_list", data=alpha_list)
@@ -141,7 +141,7 @@ def decrosstalk_roi_movie(oeid, paired_oeid, input_dir, output_dir, start_time):
         else:
             with h5.File(decrosstalk_fn, "a") as f:
                 f["data"].resize((f["data"].shape[0] + recon_signal_data.shape[0]), axis=0)
-                f["data"][start_frame:end_frame] = recon_signal_data.astype(dtype=np.int16)
+                f["data"][start_frame:end_frame] = recon_signal_data
         chunk_no += 1
     write_output_metadata(
         metadata,

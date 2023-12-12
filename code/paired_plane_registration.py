@@ -205,7 +205,7 @@ def paired_plane_cached_movie(
             xmax1 = np.vstack(reg_df.nonrigid_x.values)
         assert data_length == len(y_shifts) == len(x_shifts)
         for start_frame, end_frame in zip(start_frames, end_frames):
-            r_frames = np.zeros_like(f["data"][start_frame:end_frame])
+            r_frames = np.zeros_like(f["data"][start_frame:end_frame], dtype=np.int16)
             frame_group = f["data"][start_frame:end_frame]
             x_shift_group = x_shifts[start_frame:end_frame]
             y_shift_group = y_shifts[start_frame:end_frame]
@@ -231,7 +231,6 @@ def paired_plane_cached_movie(
                 # nonrigid_uint16 branch)
                 # njit pre-defined data type
                 # TODO: change all processing into uint16 in the future
-                r_frames = r_frames.astype(np.int16)
 
             # save r_frames
             temp_path = tmp_dir / f'{h5_file.name.split(".")[0]}_registered_to_pair.h5'
