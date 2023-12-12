@@ -75,7 +75,7 @@ def decrosstalk_roi_movie(oeid, paired_oeid, input_dir, output_dir, start_time):
     paired_reg_full_fn = next(Path("../scratch").glob(f"{paired_oeid}_registered_to_pair.h5"))
     print(output_dir)
     shutil.copy(oeid_mt, output_dir)
-    shutil.copy(next(input_dir.glob(f"processing.json")), output_dir.parent / "processing.json")
+    shutil.copy(next(input_dir.glob(f"*/{oeid}/processing.json")), output_dir.parent / "processing.json")
     print(output_dir.parent.parent / paired_oeid / "decrosstalk")
     paired_reg_emf_fn = next(
         (output_dir.parent.parent / paired_oeid / "decrosstalk").glob(
@@ -214,7 +214,7 @@ def make_output_dirs(oeid, output_dir):
 if __name__ == "__main__":
     input_dir = Path("../data/").resolve()
     output_dir = Path("../results/").resolve()
-    experiment_dirs = input_dir.glob("*/motion_correction/*")
+    experiment_dirs = input_dir.glob("*/*")
     oeid1_input_dir = next(experiment_dirs)
     oeid2_input_dir = next(experiment_dirs)
     oeid1 = oeid1_input_dir.name
