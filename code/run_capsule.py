@@ -156,6 +156,8 @@ def decrosstalk_roi_movie(oeid, paired_oeid, input_dir, output_dir, start_time):
 def prepare_cached_paired_plane_movies(oeid1, oeid2, input_dir, non_rigid=True):
     h5_file = input_dir / f"{oeid1}.h5"
     oeid_mt = Path(input_dir.parent) / oeid2 / f"{oeid2}_motion_transform.csv"
+    print(f"MOTION TRANSFORM PATH {oeid_mt}")
+    print(oeid_mt.isfile()
     transform_df = ppr.get_s2p_motion_transform(oeid_mt)
     return ppr.paired_plane_cached_movie(h5_file, transform_df, non_rigid=non_rigid)
 
