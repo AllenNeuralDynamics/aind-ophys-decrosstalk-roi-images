@@ -67,10 +67,12 @@ def write_output_metadata(
         json.dump(proc_data, f, indent=4)
 
 
-def decrosstalk_roi_movie(oeid: str, paired_oeid:str, input_dir: Path, output_dir: Path, start_time: dt) -> Path:
+def decrosstalk_roi_movie(
+    oeid: str, paired_oeid: str, input_dir: Path, output_dir: Path, start_time: dt
+) -> Path:
     """
     Run decrosstalk on roi movie
-    
+
     Parameters
     ----------
     oeid: str
@@ -83,7 +85,7 @@ def decrosstalk_roi_movie(oeid: str, paired_oeid:str, input_dir: Path, output_di
         path to output data
     start_time: dt
         start time of decrosstalk processing
-    
+
     Returns
     -------
     decrosstalk_fn: Path
@@ -174,10 +176,12 @@ def decrosstalk_roi_movie(oeid: str, paired_oeid:str, input_dir: Path, output_di
     return decrosstalk_fn
 
 
-def prepare_cached_paired_plane_movies(oeid1: str, oeid2: str, input_dir: Path, non_rigid: bool=True) -> Path:
+def prepare_cached_paired_plane_movies(
+    oeid1: str, oeid2: str, input_dir: Path, non_rigid: bool = True
+) -> Path:
     """
     Prepare cached paired plane movies
-    
+
     Parameters
     ----------
     oeid1: str
@@ -188,7 +192,7 @@ def prepare_cached_paired_plane_movies(oeid1: str, oeid2: str, input_dir: Path, 
         path to input data
     non_rigid: bool
         True if non-rigid registration was run, False otherwise
-    
+
     Returns
     -------
     h5_file: Path
@@ -205,12 +209,12 @@ def prepare_cached_paired_plane_movies(oeid1: str, oeid2: str, input_dir: Path, 
 def get_processing_json(input_dir: Path) -> dict:
     """
     Get processing json from input directory
-    
+
     Parameters
     ----------
     input_dir: Path
         path to input data
-    
+
     Returns
     -------
     pj: dict
@@ -224,12 +228,12 @@ def get_processing_json(input_dir: Path) -> dict:
 
 def check_non_rigid_registration(input_dir: Path) -> bool:
     """check processing json to see if non-rigid registration was run
-    
+
     Parameters
     ----------
     input_dir: Path
         path to input data
-    
+
     Returns
     -------
     bool
@@ -237,15 +241,17 @@ def check_non_rigid_registration(input_dir: Path) -> bool:
     """
     processing_json = get_processing_json(input_dir)
     # if pj["data_processes"][0]["parameters"]["suite2p_args"].get(
-    if processing_json["processing_pipeline"]["data_processes"][0]["parameters"]["suite2p_args"].get(
-        "nonrigid", False
-    ):
+    if processing_json["processing_pipeline"]["data_processes"][0]["parameters"][
+        "suite2p_args"
+    ].get("nonrigid", False):
         return True
     else:
         return False
 
 
-def run_decrosstalk(input_dir: Path, output_dir: Path, oeid: str, paired_oeid: str, start_time: dt) -> None:
+def run_decrosstalk(
+    input_dir: Path, output_dir: Path, oeid: str, paired_oeid: str, start_time: dt
+) -> None:
     """Runs paired plane registration and decrosstalk for a given pair of experiments
 
     Parameters
@@ -277,14 +283,14 @@ def run_decrosstalk(input_dir: Path, output_dir: Path, oeid: str, paired_oeid: s
 def make_output_dirs(oeid: str, output_dir: Path) -> Path:
     """
     Make output directories for decrosstalk processing
-    
+
     Parameters
     ----------
     oeid: Path
         ophys experiment id
     output_dir: Path
         path to output data
-    
+
     Returns
     -------
     results_dir: Path
