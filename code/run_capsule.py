@@ -67,7 +67,28 @@ def write_output_metadata(
         json.dump(proc_data, f, indent=4)
 
 
-def decrosstalk_roi_movie(oeid, paired_oeid, input_dir, output_dir, start_time):
+def decrosstalk_roi_movie(oeid: str, paired_oeid:str, input_dir: Path, output_dir: Path, start_time: dt) -> Path:
+    """
+    Run decrosstalk on roi movie
+    
+    Parameters
+    ----------
+    oeid: str
+        ophys experiment id
+    paired_oeid: str
+        ophys experiment id of paired experiment
+    input_dir: Path
+        path to input data
+    output_dir: Path
+        path to output data
+    start_time: dt
+        start time of decrosstalk processing
+    
+    Returns
+    -------
+    decrosstalk_fn: Path
+        path to decrosstalk roi movie
+    """
     logging.info(f"Input directory, {input_dir}")
     logging.info(f"Output directory, {output_dir}")
     logging.info(f"Ophys experiment ID pairs, {oeid}, {paired_oeid}")
@@ -153,7 +174,26 @@ def decrosstalk_roi_movie(oeid, paired_oeid, input_dir, output_dir, start_time):
     return decrosstalk_fn
 
 
-def prepare_cached_paired_plane_movies(oeid1, oeid2, input_dir, non_rigid=True):
+def prepare_cached_paired_plane_movies(oeid1: str, oeid2: str, input_dir: Path, non_rigid: bool=True) -> Path:
+    """
+    Prepare cached paired plane movies
+    
+    Parameters
+    ----------
+    oeid1: str
+        ophys experiment id
+    oeid2: str
+        ophys experiment id of paired experiment
+    input_dir: Path
+        path to input data
+    non_rigid: bool
+        True if non-rigid registration was run, False otherwise
+    
+    Returns
+    -------
+    h5_file: Path
+        path to cached paired plane movie
+    """
     h5_file = input_dir / f"{oeid1}.h5"
     oeid_mt = Path(input_dir.parent) / oeid2 / f"{oeid2}_motion_transform.csv"
     print(f"MOTION TRANSFORM PATH {oeid_mt}")
@@ -162,13 +202,42 @@ def prepare_cached_paired_plane_movies(oeid1, oeid2, input_dir, non_rigid=True):
     return ppr.paired_plane_cached_movie(h5_file, transform_df, non_rigid=non_rigid)
 
 
-def check_non_rigid_registration(input_dir, oeid):
-    """check processing json to see if non-rigid registration was run"""
+def get_processing_json(input_dir: Path) -> dict:
+    """
+    Get processing json from input directory
+    
+    Parameters
+    ----------
+    input_dir: Path
+        path to input data
+    
+    Returns
+    -------
+    pj: dict
+        processing json
+    """
     processing_json = next(input_dir.glob("processing.json"))
     with open(processing_json, "r") as f:
         pj = json.load(f)
+    return pj
+
+
+def check_non_rigid_registration(input_dir: Path) -> bool:
+    """check processing json to see if non-rigid registration was run
+    
+    Parameters
+    ----------
+    input_dir: Path
+        path to input data
+    
+    Returns
+    -------
+    bool
+        True if non-rigid registration was run, False otherwise
+    """
+    processing_json = get_processing_json(input_dir)
     # if pj["data_processes"][0]["parameters"]["suite2p_args"].get(
-    if pj["processing_pipeline"]["data_processes"][0]["parameters"]["suite2p_args"].get(
+    if processing_json["processing_pipeline"]["data_processes"][0]["parameters"]["suite2p_args"].get(
         "nonrigid", False
     ):
         return True
@@ -176,7 +245,7 @@ def check_non_rigid_registration(input_dir, oeid):
         return False
 
 
-def run_decrosstalk(input_dir: Path, output_dir: Path, oeid: str, paired_oeid: str, start_time: dt):
+def run_decrosstalk(input_dir: Path, output_dir: Path, oeid: str, paired_oeid: str, start_time: dt) -> None:
     """Runs paired plane registration and decrosstalk for a given pair of experiments
 
     Parameters
@@ -205,7 +274,22 @@ def run_decrosstalk(input_dir: Path, output_dir: Path, oeid: str, paired_oeid: s
     ppr.episodic_mean_fov(decrosstalk, output_dir)
 
 
-def make_output_dirs(oeid, output_dir):
+def make_output_dirs(oeid: str, output_dir: Path) -> Path:
+    """
+    Make output directories for decrosstalk processing
+    
+    Parameters
+    ----------
+    oeid: Path
+        ophys experiment id
+    output_dir: Path
+        path to output data
+    
+    Returns
+    -------
+    results_dir: Path
+        path to decrosstalk output directory
+    """
     results_dir = output_dir / oeid
     results_dir.mkdir(exist_ok=True)
     results_dir = output_dir / oeid / "decrosstalk"
@@ -236,7 +320,6 @@ if __name__ == "__main__":
     run_decrosstalk(oeid1_input_dir, oeid1_output_dir, oeid1, oeid2, start_time_oeid1)
     start_time_oeid2 = dt.now(tz.utc)
     run_decrosstalk(oeid2_input_dir, oeid2_output_dir, oeid2, oeid1, start_time_oeid2)
-    print("unlinking paired registered flies")
     (Path("../scratch/") / f"{oeid1}_registered_to_pair.h5").unlink()
     print("unlinking paired registered flies")
     (Path("../scratch/") / f"{oeid2}_registered_to_pair.h5").unlink()
