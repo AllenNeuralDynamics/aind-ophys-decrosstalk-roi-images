@@ -95,7 +95,7 @@ def decrosstalk_roi_movie(
     logging.info(f"Output directory, {output_dir}")
     logging.info(f"Ophys experiment ID pairs, {oeid}, {paired_oeid}")
     oeid_mt = input_dir / f"{oeid}_motion_transform.csv"
-    paired_reg_full_fn = next(Path("../scratch").glob(f"{paired_oeid}_registered_to_pair.h5"))
+    paired_oeid_reg_to_oeid_full_fn = next(Path("../scratch").glob(f"{paired_oeid}_registered_to_pair.h5"))
     print(output_dir)
     shutil.copy(oeid_mt, output_dir)
     shutil.copy(next(input_dir.glob(f"processing.json")), output_dir.parent / "processing.json")
@@ -139,7 +139,7 @@ def decrosstalk_roi_movie(
     # generate the decrosstalk movie with alpha and beta values calculated above using the full paired registered movie
     chunk_no = 0
     for start_frame, end_frame in zip(start_frames, end_frames):
-        with h5.File(paired_reg_full_fn, "r") as f:
+        with h5.File(paired_oeid_reg_to_oeid_full_fn, "r") as f:
             paired_data = f["data"][start_frame:end_frame]
         with h5.File(input_dir / f"{oeid}_registered.h5", "r") as f:
             signal_data = f["data"][start_frame:end_frame]
@@ -200,8 +200,6 @@ def prepare_cached_paired_plane_movies(
     """
     h5_file = input_dir / f"{oeid1}.h5"
     oeid_mt = Path(input_dir.parent) / oeid2 / f"{oeid2}_motion_transform.csv"
-    print(f"MOTION TRANSFORM PATH {oeid_mt}")
-    print(oeid_mt.is_file())
     transform_df = ppr.get_s2p_motion_transform(oeid_mt)
     return ppr.paired_plane_cached_movie(h5_file, transform_df, non_rigid=non_rigid)
 
@@ -340,15 +338,15 @@ if __name__ == "__main__":
     oeid2_output_dir = make_output_dirs(oeid2, output_dir)
     non_rigid = check_non_rigid_registration(oeid1_input_dir, oeid1)
     block_size = get_block_size(oeid1_input_dir)
-    paired_reg_oeid1 = prepare_cached_paired_plane_movies(
+    oeid1_reg_to_oeid2_transform = prepare_cached_paired_plane_movies(
         oeid1, oeid2, oeid1_input_dir, non_rigid=non_rigid, block_size=block_size
     )
-    paired_reg_oeid2 = prepare_cached_paired_plane_movies(
+    oeid2_reg_to_oeid1_transform = prepare_cached_paired_plane_movies(
         oeid2, oeid1, oeid2_input_dir, non_rigid=non_rigid, block_size=block_size
     )
     processing_json = get_processing_json(oeid1_input_dir)
-    ppr.episodic_mean_fov(paired_reg_oeid1, oeid1_output_dir)
-    ppr.episodic_mean_fov(paired_reg_oeid2, oeid2_output_dir)
+    ppr.episodic_mean_fov(oeid1_reg_to_oeid2_transform, oeid1_output_dir)
+    ppr.episodic_mean_fov(oeid2_reg_to_oeid1_transform, oeid2_output_dir)
     start_time_oeid1 = dt.now(tz.utc)
     run_decrosstalk(oeid1_input_dir, oeid1_output_dir, oeid1, oeid2, start_time_oeid1)
     start_time_oeid2 = dt.now(tz.utc)

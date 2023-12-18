@@ -109,6 +109,7 @@ def decrosstalk_roi_image_from_episodic_mean_fov(
     )
     with h5py.File(signal_fn, "r") as f:
         data_length = f["data"].shape[0]
+        signal_data = f["data"][()]
     start_frames = range(data_length)
 
     alpha_list = []
