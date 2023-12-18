@@ -49,7 +49,7 @@ def get_motion_correction_crop_xy_range(oeid, input_dir):
         Lists of y range and x range, [start, end] pixel index
     """
     # TODO: validate in case where max < 0 or min > 0 (if there exists an example)
-    suite2p_rigid_motion_transform_csv = input_dir / oeid / f"{oeid}_motion_transform.csv"
+    suite2p_rigid_motion_transform_csv = input_dir / oeid / 'motion_correction' / f"{oeid}_motion_transform.csv"
     motion_df = pd.read_csv(
         suite2p_rigid_motion_transform_csv
     )  # this is suite2p rigid motion transform csv file
