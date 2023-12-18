@@ -204,8 +204,8 @@ def prepare_cached_paired_plane_movies(
     h5_file: Path
         path to cached paired plane movie
     """
-    h5_file = input_dir / f"{oeid1}.h5"
-    oeid_mt = Path(input_dir.parent) / oeid2 / f"{oeid2}_motion_transform.csv"
+    h5_file = input_dir / 'motion_correction' / f"{oeid1}.h5"
+    oeid_mt = Path(input_dir.parent) / oeid2 / 'motion_correction' / f"{oeid2}_motion_transform.csv"
     transform_df = ppr.get_s2p_motion_transform(oeid_mt)
     return ppr.paired_plane_cached_movie(
         h5_file, transform_df, non_rigid=non_rigid, block_size=block_size
@@ -247,7 +247,7 @@ def get_block_size(input_dir: Path) -> list:
     """
     processing_json = get_processing_json(input_dir)
     try:
-        block_size = processing_json["processing_pipeline"]["data_processes"][0]["parameters"][
+        block_size = processing_json["processing_pipeline"]["data_processes"][0]["parameters"]['suite2p_args'][
             "block_size"
         ]
     except KeyError:
@@ -272,7 +272,7 @@ def check_non_rigid_registration(input_dir: Path) -> bool:
     """
     processing_json = get_processing_json(input_dir)
     try:
-        nonrigid = processing_json["processing_pipeline"]["data_processes"][0]["parameters"][
+        nonrigid = processing_json["processing_pipeline"]["data_processes"][0]["parameters"]['suite2p_args'][
             "nonrigid"
         ]
     except KeyError:
@@ -349,7 +349,7 @@ if __name__ == "__main__":
         num_frames = 1000
     input_dir = Path("../data/").resolve()
     output_dir = Path("../results/").resolve()
-    experiment_dirs = input_dir.glob("*/motion_correction/*")
+    experiment_dirs = input_dir.glob("*/*")
     oeid1_input_dir = next(experiment_dirs)
     oeid2_input_dir = next(experiment_dirs)
     oeid1 = oeid1_input_dir.name
