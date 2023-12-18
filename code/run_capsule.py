@@ -60,9 +60,14 @@ def write_output_metadata(
     processing.write_standard_file(output_directory=Path(output_fp.parent.parent))
     with open(output_fp.parent.parent / "processing.json", "r") as f:
         dct_data = json.load(f)
-    proc_data["processing_pipeline"]["data_processes"].append(
-        dct_data["processing_pipeline"]["data_processes"][0]
-    )
+    try:
+        proc_data["processing_pipeline"]["data_processes"].append(
+            dct_data["processing_pipeline"]["data_processes"][0]
+        )
+    except KeyError:
+        proc_data["data_processes"].append(
+            dct_data["processing_pipeline"]["data_processes"][0]
+        )
     with open(output_fp.parent.parent / "processing.json", "w") as f:
         json.dump(proc_data, f, indent=4)
 
