@@ -309,7 +309,7 @@ def run_decrosstalk(
     # create the EMF of the registered to pair movie from cache
 
     # create EMF of the self registered movies
-    ppr.episodic_mean_fov(input_dir / f"{oeid}_registered.h5", output_dir)
+    ppr.episodic_mean_fov(input_dir / 'motion_correction' / f"{oeid}_registered.h5", output_dir)
     logging.info(f"Creating movie...")
     # run decrosstalk
     decrosstalk = decrosstalk_roi_movie(oeid, paired_oeid, input_dir, output_dir, start_time)
