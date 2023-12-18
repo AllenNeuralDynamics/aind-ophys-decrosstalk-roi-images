@@ -13,6 +13,7 @@ from aind_data_schema.processing import DataProcess, ProcessName, PipelineProces
 from typing import Union
 from datetime import datetime as dt
 from datetime import timezone as tz
+import argparse
 
 
 def write_output_metadata(
@@ -65,9 +66,7 @@ def write_output_metadata(
             dct_data["processing_pipeline"]["data_processes"][0]
         )
     except KeyError:
-        proc_data["data_processes"].append(
-            dct_data["processing_pipeline"]["data_processes"][0]
-        )
+        proc_data["data_processes"].append(dct_data["processing_pipeline"]["data_processes"][0])
     with open(output_fp.parent.parent / "processing.json", "w") as f:
         json.dump(proc_data, f, indent=4)
 
@@ -100,7 +99,9 @@ def decrosstalk_roi_movie(
     logging.info(f"Output directory, {output_dir}")
     logging.info(f"Ophys experiment ID pairs, {oeid}, {paired_oeid}")
     oeid_mt = input_dir / f"{oeid}_motion_transform.csv"
-    paired_oeid_reg_to_oeid_full_fn = next(Path("../scratch").glob(f"{paired_oeid}_registered_to_pair.h5"))
+    paired_oeid_reg_to_oeid_full_fn = next(
+        Path("../scratch").glob(f"{paired_oeid}_registered_to_pair.h5")
+    )
     print(output_dir)
     shutil.copy(oeid_mt, output_dir)
     shutil.copy(next(input_dir.glob(f"processing.json")), output_dir.parent / "processing.json")
@@ -182,7 +183,7 @@ def decrosstalk_roi_movie(
 
 
 def prepare_cached_paired_plane_movies(
-    oeid1: str, oeid2: str, input_dir: Path, non_rigid: bool = True, block_size = [128,128]
+    oeid1: str, oeid2: str, input_dir: Path, non_rigid: bool = True, block_size=[128, 128]
 ) -> Path:
     """
     Prepare cached paired plane movies
@@ -206,7 +207,9 @@ def prepare_cached_paired_plane_movies(
     h5_file = input_dir / f"{oeid1}.h5"
     oeid_mt = Path(input_dir.parent) / oeid2 / f"{oeid2}_motion_transform.csv"
     transform_df = ppr.get_s2p_motion_transform(oeid_mt)
-    return ppr.paired_plane_cached_movie(h5_file, transform_df, non_rigid=non_rigid, block_size=block_size)
+    return ppr.paired_plane_cached_movie(
+        h5_file, transform_df, non_rigid=non_rigid, block_size=block_size
+    )
 
 
 def get_processing_json(input_dir: Path) -> dict:
@@ -278,7 +281,12 @@ def check_non_rigid_registration(input_dir: Path) -> bool:
 
 
 def run_decrosstalk(
-    input_dir: Path, output_dir: Path, oeid: str, paired_oeid: str, start_time: dt
+    input_dir: Path,
+    output_dir: Path,
+    oeid: str,
+    paired_oeid: str,
+    start_time: dt,
+    num_frames: int = 1000,
 ) -> None:
     """Runs paired plane registration and decrosstalk for a given pair of experiments
 
@@ -305,7 +313,7 @@ def run_decrosstalk(
     logging.info(f"Creating movie...")
     # run decrosstalk
     decrosstalk = decrosstalk_roi_movie(oeid, paired_oeid, input_dir, output_dir, start_time)
-    ppr.episodic_mean_fov(decrosstalk, output_dir)
+    ppr.episodic_mean_fov(decrosstalk, output_dir, num_frames=num_frames)
 
 
 def make_output_dirs(oeid: str, output_dir: Path) -> Path:
@@ -332,6 +340,13 @@ def make_output_dirs(oeid: str, output_dir: Path) -> Path:
 
 
 if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--debug", action="store_true")
+    args = parser.parse_args()
+    if args.debug:
+        num_frames = 300
+    else:
+        num_frames = 1000
     input_dir = Path("../data/").resolve()
     output_dir = Path("../results/").resolve()
     experiment_dirs = input_dir.glob("*/motion_correction/*")
@@ -350,8 +365,12 @@ if __name__ == "__main__":
         oeid2, oeid1, oeid2_input_dir, non_rigid=non_rigid, block_size=block_size
     )
     processing_json = get_processing_json(oeid1_input_dir)
-    ppr.episodic_mean_fov(oeid1_reg_to_oeid2_motion_filepath, oeid1_output_dir)
-    ppr.episodic_mean_fov(oeid2_reg_to_oeid1_motion_filepath, oeid2_output_dir)
+    ppr.episodic_mean_fov(
+        oeid1_reg_to_oeid2_motion_filepath, oeid1_output_dir, num_frames=num_frames
+    )
+    ppr.episodic_mean_fov(
+        oeid2_reg_to_oeid1_motion_filepath, oeid2_output_dir, num_frames=num_frames
+    )
     start_time_oeid1 = dt.now(tz.utc)
     run_decrosstalk(oeid1_input_dir, oeid1_output_dir, oeid1, oeid2, start_time_oeid1)
     start_time_oeid2 = dt.now(tz.utc)

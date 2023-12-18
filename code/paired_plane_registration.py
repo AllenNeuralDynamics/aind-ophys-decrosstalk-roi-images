@@ -51,7 +51,7 @@ def generate_mean_episodic_fov_pairings_registered_frames(
     oeids: tuple,
     save_dir: Path = Path("../results/"),
     max_num_epochs=10,
-    num_frames_to_avg=1000,
+    num_frames=1000,
     non_rigid=True,
 ):
     """Generate mean episodic FOVs registered to the paired experiment for both experiments in the
@@ -68,7 +68,7 @@ def generate_mean_episodic_fov_pairings_registered_frames(
         path to save registered frames, by default None
     max_num_epochs : int
         Maximum number of epochs to calculate the mean FOV image for
-    num_frames_to_avg : int
+    num_frames : int
         Number of frames to average to calculate the mean FOV image
 
     Returns
@@ -107,11 +107,11 @@ def generate_mean_episodic_fov_pairings_registered_frames(
             data_length = f["data"].shape[0]
             assert data_length == paired_plane_data[k]["paired_motion_df"].shape[0]
 
-            num_epochs = min(max_num_epochs, data_length // num_frames_to_avg)
+            num_epochs = min(max_num_epochs, data_length // num_frames)
             epoch_interval = data_length // (
                 num_epochs + 1
             )  # +1 to avoid the very first frame (about half of each epoch)
-            num_frames = min(num_frames_to_avg, epoch_interval)
+            num_frames = min(num_frames, epoch_interval)
             start_frames = [num_frames // 2 + i * epoch_interval for i in range(num_epochs)]
             assert start_frames[-1] + num_frames < data_length
 
