@@ -49,7 +49,7 @@ def get_motion_correction_crop_xy_range(oeid, input_dir):
         Lists of y range and x range, [start, end] pixel index
     """
     # TODO: validate in case where max < 0 or min > 0 (if there exists an example)
-    suite2p_rigid_motion_transform_csv = input_dir / f"{oeid}_motion_transform.csv"
+    suite2p_rigid_motion_transform_csv = input_dir / oeid / f"{oeid}_motion_transform.csv"
     motion_df = pd.read_csv(
         suite2p_rigid_motion_transform_csv
     )  # this is suite2p rigid motion transform csv file
@@ -104,9 +104,12 @@ def decrosstalk_roi_image_from_episodic_mean_fov(
     """
 
     # Assign start frames for each epoch
-    signal_fn = input_dir / f"{oeid}_registered_mean_fov.h5"
+    signal_fn = (
+        Path("../results") / oeid / "decrosstalk" / f"{oeid}_registered_episodic_mean_fov.h5"
+    )
     with h5py.File(signal_fn, "r") as f:
         data_length = f["data"].shape[0]
+        signal_data = f["data"][()]
     start_frames = range(data_length)
 
     alpha_list = []
@@ -117,6 +120,7 @@ def decrosstalk_roi_image_from_episodic_mean_fov(
             oeid,
             paired_reg_fn,
             input_dir,
+            start_frame,
             pixel_size,
             grid_interval=grid_interval,
             max_grid_val=max_grid_val,
@@ -145,8 +149,9 @@ def decrosstalk_roi_image_from_episodic_mean_fov(
 
 def decrosstalk_roi_image_single_pair_from_episodic_mean_fov(
     oeid,
-    paired_reg_fn,
+    paired_reg_emf_fn,
     input_dir,
+    start_frame,
     pix_size,
     motion_buffer=5,
     grid_interval=0.01,
@@ -159,12 +164,14 @@ def decrosstalk_roi_image_single_pair_from_episodic_mean_fov(
     -----------
     oeid : int
         ophys experiment id
-    paired_reg_fn : str, Path
+    paired_reg_emf_fn : str, Path
         path to paired registration file
         TODO: Once paired plane registration pipeline is finalized,
         this parameter can be removed or replaced with paired_oeid
     input_dir: Path
         path to the input directory
+    start_frame: int
+        start frame of the mean images
     pix_size = float
         pixel size in um of imaging plane
     motion_buffer : int, optional
@@ -184,14 +191,15 @@ def decrosstalk_roi_image_single_pair_from_episodic_mean_fov(
     mean_norm_mi_values : np.array
         mean normalized mutual information values
     """
-    signal_fn = input_dir / f"{oeid}_registered_mean_fov.h5"
-    start_frame = 1
+    signal_fn = (
+        Path("../results") / oeid / "decrosstalk" / f"{oeid}_registered_episodic_mean_fov.h5"
+    )
     with h5py.File(signal_fn, "r") as f:
         signal_mean = f["data"][start_frame : start_frame + 1].mean(axis=0)
-    with h5py.File(paired_reg_fn, "r") as f:
+    with h5py.File(paired_reg_emf_fn, "r") as f:
         paired_mean = f["data"][start_frame : start_frame + 1].mean(axis=0)
 
-    paired_id = paired_reg_fn.name.split("_")[0]
+    paired_id = paired_reg_emf_fn.name.split("_")[0]
     p1y, p1x = get_motion_correction_crop_xy_range_from_both_planes(oeid, paired_id, input_dir)
     signal_mean = signal_mean[
         p1y[0] + motion_buffer : p1y[1] - motion_buffer,
@@ -227,7 +235,7 @@ def decrosstalk_roi_image_single_pair_from_episodic_mean_fov(
     mean_norm_mi_values = []
     for alpha in alpha_list:
         for beta in beta_list:
-            temp_mixing = np.array([[1 - alpha, alpha], [beta, 1 - beta]])
+            temp_mixing = np.array([[1 - alpha, beta], [alpha, 1 - beta]])
             temp_unmixing = np.linalg.inv(temp_mixing)
             temp_unmixed_data = np.dot(temp_unmixing, data)
             temp_recon_signal = temp_unmixed_data[0, :].reshape(signal_mean.shape)
@@ -243,7 +251,7 @@ def decrosstalk_roi_image_single_pair_from_episodic_mean_fov(
             ab_pair.append([alpha, beta])
 
     alpha, beta = ab_pair[np.argmin(mean_norm_mi_values)]
-    return alpha, beta, np.array(mean_norm_mi_values)
+    return alpha, beta, np.array(mean_norm_mi_values).tolist()
 
 
 def get_signal_paired_top_masks(
@@ -537,7 +545,7 @@ def apply_mixing_matrix(alpha, beta, signal_mean, paired_mean):
     recon_paired : np.array
         reconstructed paired image
     """
-    mixing_mat = [[1 - alpha, alpha], [beta, 1 - beta]]
+    mixing_mat = [[1 - alpha, beta], [alpha, 1 - beta]]
     unmixing_mat = np.linalg.inv(mixing_mat)
     raw_data = np.vstack([signal_mean.ravel(), paired_mean.ravel()])
     recon_data = np.dot(unmixing_mat, raw_data)
