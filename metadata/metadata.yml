@@ -1,5 +1,11 @@
 metadata_version: 1
 name: aind-ophys-decrosstalk-roi-images
-description: Basic structure of a capsule to be customized as needed.
+description: Removes ghost images from paired plane using roi-image based decrosstalk
+  method.
+tags:
+- decrosstalk-roi-images
 authors:
 - name: AIND
+- name: Jinho Kim
+- name: Arielle Leon
+- name: Matt Davis
