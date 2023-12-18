@@ -177,7 +177,7 @@ def decrosstalk_roi_movie(
 
 
 def prepare_cached_paired_plane_movies(
-    oeid1: str, oeid2: str, input_dir: Path, non_rigid: bool = True
+    oeid1: str, oeid2: str, input_dir: Path, non_rigid: bool = True, block_size = [128,128]
 ) -> Path:
     """
     Prepare cached paired plane movies
@@ -201,7 +201,7 @@ def prepare_cached_paired_plane_movies(
     h5_file = input_dir / f"{oeid1}.h5"
     oeid_mt = Path(input_dir.parent) / oeid2 / f"{oeid2}_motion_transform.csv"
     transform_df = ppr.get_s2p_motion_transform(oeid_mt)
-    return ppr.paired_plane_cached_movie(h5_file, transform_df, non_rigid=non_rigid)
+    return ppr.paired_plane_cached_movie(h5_file, transform_df, non_rigid=non_rigid, block_size=block_size)
 
 
 def get_processing_json(input_dir: Path) -> dict:
