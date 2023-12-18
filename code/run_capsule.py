@@ -338,15 +338,15 @@ if __name__ == "__main__":
     oeid2_output_dir = make_output_dirs(oeid2, output_dir)
     non_rigid = check_non_rigid_registration(oeid1_input_dir, oeid1)
     block_size = get_block_size(oeid1_input_dir)
-    oeid1_reg_to_oeid2_transform = prepare_cached_paired_plane_movies(
+    oeid1_reg_to_oeid2_motion_filepath = prepare_cached_paired_plane_movies(
         oeid1, oeid2, oeid1_input_dir, non_rigid=non_rigid, block_size=block_size
     )
-    oeid2_reg_to_oeid1_transform = prepare_cached_paired_plane_movies(
+    oeid2_reg_to_oeid1_motion_filepath = prepare_cached_paired_plane_movies(
         oeid2, oeid1, oeid2_input_dir, non_rigid=non_rigid, block_size=block_size
     )
     processing_json = get_processing_json(oeid1_input_dir)
-    ppr.episodic_mean_fov(oeid1_reg_to_oeid2_transform, oeid1_output_dir)
-    ppr.episodic_mean_fov(oeid2_reg_to_oeid1_transform, oeid2_output_dir)
+    ppr.episodic_mean_fov(oeid1_reg_to_oeid2_motion_filepath, oeid1_output_dir)
+    ppr.episodic_mean_fov(oeid2_reg_to_oeid1_motion_filepath, oeid2_output_dir)
     start_time_oeid1 = dt.now(tz.utc)
     run_decrosstalk(oeid1_input_dir, oeid1_output_dir, oeid1, oeid2, start_time_oeid1)
     start_time_oeid2 = dt.now(tz.utc)
