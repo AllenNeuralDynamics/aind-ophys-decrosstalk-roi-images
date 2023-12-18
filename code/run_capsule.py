@@ -104,7 +104,7 @@ def decrosstalk_roi_movie(
     )
     print(output_dir)
     shutil.copy(oeid_mt, output_dir)
-    shutil.copy(next(input_dir.glob(f"processing.json")), output_dir.parent / "processing.json")
+    shutil.copy(input_dir.glob(f"*.json"), output_dir.parent)
     print(output_dir.parent.parent / paired_oeid / "decrosstalk")
     paired_reg_emf_fn = next(
         (output_dir.parent.parent / paired_oeid / "decrosstalk").glob(
