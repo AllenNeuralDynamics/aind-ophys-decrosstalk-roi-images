@@ -226,6 +226,31 @@ def get_processing_json(input_dir: Path) -> dict:
     return pj
 
 
+def get_block_size(input_dir: Path) -> list:
+    """get image dimensions from processing json
+
+    Parameters
+    ----------
+    processing: dict
+        processing json
+
+    Returns
+    -------
+    block_size: list
+        block size of image
+    """
+    processing_json = get_processing_json(input_dir)
+    try:
+        block_size = processing_json["processing_pipeline"]["data_processes"][0]["parameters"][
+            "block_size"
+        ]
+    except KeyError:
+        block_size = processing_json["data_processes"][0]["parameters"]["suite2p_args"][
+            "block_size"
+        ]
+    return block_size
+
+
 def check_non_rigid_registration(input_dir: Path) -> bool:
     """check processing json to see if non-rigid registration was run
 
@@ -240,13 +265,13 @@ def check_non_rigid_registration(input_dir: Path) -> bool:
         True if non-rigid registration was run, False otherwise
     """
     processing_json = get_processing_json(input_dir)
-    # if pj["data_processes"][0]["parameters"]["suite2p_args"].get(
-    if processing_json["processing_pipeline"]["data_processes"][0]["parameters"][
-        "suite2p_args"
-    ].get("nonrigid", False):
-        return True
-    else:
-        return False
+    try:
+        nonrigid = processing_json["processing_pipeline"]["data_processes"][0]["parameters"][
+            "nonrigid"
+        ]
+    except KeyError:
+        nonrigid = processing_json["data_processes"][0]["parameters"]["suite2p_args"]["nonrigid"]
+    return nonrigid
 
 
 def run_decrosstalk(
@@ -314,12 +339,14 @@ if __name__ == "__main__":
     oeid1_output_dir = make_output_dirs(oeid1, output_dir)
     oeid2_output_dir = make_output_dirs(oeid2, output_dir)
     non_rigid = check_non_rigid_registration(oeid1_input_dir, oeid1)
+    block_size = get_block_size(oeid1_input_dir)
     paired_reg_oeid1 = prepare_cached_paired_plane_movies(
-        oeid1, oeid2, oeid1_input_dir, non_rigid=non_rigid
+        oeid1, oeid2, oeid1_input_dir, non_rigid=non_rigid, block_size=block_size
     )
     paired_reg_oeid2 = prepare_cached_paired_plane_movies(
-        oeid2, oeid1, oeid2_input_dir, non_rigid=non_rigid
+        oeid2, oeid1, oeid2_input_dir, non_rigid=non_rigid, block_size=block_size
     )
+    processing_json = get_processing_json(oeid1_input_dir)
     ppr.episodic_mean_fov(paired_reg_oeid1, oeid1_output_dir)
     ppr.episodic_mean_fov(paired_reg_oeid2, oeid2_output_dir)
     start_time_oeid1 = dt.now(tz.utc)

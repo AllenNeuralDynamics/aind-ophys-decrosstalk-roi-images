@@ -163,8 +163,9 @@ def paired_plane_cached_movie(
     h5_file: Path,
     reg_df: pd.DataFrame,
     tmp_dir: Path = Path("../scratch/"),
-    chunk_size=5000,
-    non_rigid=True,
+    chunk_size: int = 5000,
+    non_rigid: bool = True,
+    block_size: list = [128, 128],
 ):
     """Transform frames and save to h5 file
 
@@ -195,11 +196,9 @@ def paired_plane_cached_movie(
         if non_rigid:
             assert "nonrigid_x" in reg_df.columns
             assert "nonrigid_y" in reg_df.columns
-            # from default parameters:
-            # TODO: read this from the log file
-            Ly = 512
-            Lx = 512
-            block_size = (128, 128)
+            Ly = f["data"].shape[1]
+            Lx = f["data"].shape[2]
+            block_size = (block_size[0], block_size[1])
             blocks = nonrigid.make_blocks(Ly=Ly, Lx=Lx, block_size=block_size)
             ymax1 = np.vstack(reg_df.nonrigid_y.values)
             xmax1 = np.vstack(reg_df.nonrigid_x.values)
