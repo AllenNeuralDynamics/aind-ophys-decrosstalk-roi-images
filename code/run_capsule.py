@@ -98,13 +98,14 @@ def decrosstalk_roi_movie(
     logging.info(f"Input directory, {input_dir}")
     logging.info(f"Output directory, {output_dir}")
     logging.info(f"Ophys experiment ID pairs, {oeid}, {paired_oeid}")
-    oeid_mt = input_dir / f"{oeid}_motion_transform.csv"
+    oeid_mt = input_dir / 'motion_correction' / f"{oeid}_motion_transform.csv"
     paired_oeid_reg_to_oeid_full_fn = next(
         Path("../scratch").glob(f"{paired_oeid}_registered_to_pair.h5")
     )
     print(output_dir)
     shutil.copy(oeid_mt, output_dir)
-    shutil.copy(input_dir.glob(f"*.json"), output_dir.parent)
+    for j in input_dir.glob(f"*.json"):
+        shutil.copy(j, output_dir.parent)
     print(output_dir.parent.parent / paired_oeid / "decrosstalk")
     paired_reg_emf_fn = next(
         (output_dir.parent.parent / paired_oeid / "decrosstalk").glob(
