@@ -341,7 +341,7 @@ def histogram_shifts(expt1_shifts, expt2_shifts):
     plt.show()
 
 
-def episodic_mean_fov(movie_fn, save_dir, max_num_epochs=10, num_frames_to_avg=1000):
+def episodic_mean_fov(movie_fn, save_dir, max_num_epochs=10, num_frames=1000):
     """
     Calculate the mean FOV image for each epoch in a movie and saves it to an h5 file
     Parameters
@@ -353,7 +353,7 @@ def episodic_mean_fov(movie_fn, save_dir, max_num_epochs=10, num_frames_to_avg=1
         Directory to store the movie
     max_num_epochs : int
         Maximum number of epochs to calculate the mean FOV image for
-    num_frames_to_avg : int
+    num_frames : int
         Number of frames to average to calculate the mean FOV image
 
     Returns
@@ -367,11 +367,11 @@ def episodic_mean_fov(movie_fn, save_dir, max_num_epochs=10, num_frames_to_avg=1
         raise (ValueError("save_dir must be a directory"))
     with h5py.File(movie_fn, "r") as f:
         data_length = f["data"].shape[0]
-        num_epochs = min(max_num_epochs, data_length // num_frames_to_avg)
+        num_epochs = min(max_num_epochs, data_length // num_frames)
         epoch_interval = data_length // (
             num_epochs + 1
         )  # +1 to avoid the very first frame (about half of each epoch)
-        num_frames = min(num_frames_to_avg, epoch_interval)
+        num_frames = min(num_frames, epoch_interval)
         start_frames = [num_frames // 2 + i * epoch_interval for i in range(num_epochs)]
         assert start_frames[-1] + num_frames < data_length
 
@@ -379,7 +379,7 @@ def episodic_mean_fov(movie_fn, save_dir, max_num_epochs=10, num_frames_to_avg=1
         mean_fov = np.zeros((num_epochs, f["data"].shape[1], f["data"].shape[2]))
         for i in range(num_epochs):
             start_frame = start_frames[i]
-            mean_fov[i] = np.mean(f["data"][start_frame : start_frame + num_frames_to_avg], axis=0)
+            mean_fov[i] = np.mean(f["data"][start_frame : start_frame + num_frames], axis=0)
     save_path = save_dir / f"{movie_fn.stem}_episodic_mean_fov.h5"
     with h5py.File(save_path, "w") as f:
         f.create_dataset("data", data=mean_fov)

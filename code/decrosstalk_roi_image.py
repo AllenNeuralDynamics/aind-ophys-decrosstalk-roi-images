@@ -149,7 +149,7 @@ def decrosstalk_roi_image_from_episodic_mean_fov(
 
 def decrosstalk_roi_image_single_pair_from_episodic_mean_fov(
     oeid,
-    paired_reg_fn,
+    paired_reg_emf_fn,
     input_dir,
     start_frame,
     pix_size,
@@ -164,7 +164,7 @@ def decrosstalk_roi_image_single_pair_from_episodic_mean_fov(
     -----------
     oeid : int
         ophys experiment id
-    paired_reg_fn : str, Path
+    paired_reg_emf_fn : str, Path
         path to paired registration file
         TODO: Once paired plane registration pipeline is finalized,
         this parameter can be removed or replaced with paired_oeid
@@ -196,10 +196,10 @@ def decrosstalk_roi_image_single_pair_from_episodic_mean_fov(
     )
     with h5py.File(signal_fn, "r") as f:
         signal_mean = f["data"][start_frame : start_frame + 1].mean(axis=0)
-    with h5py.File(paired_reg_fn, "r") as f:
+    with h5py.File(paired_reg_emf_fn, "r") as f:
         paired_mean = f["data"][start_frame : start_frame + 1].mean(axis=0)
 
-    paired_id = paired_reg_fn.name.split("_")[0]
+    paired_id = paired_reg_emf_fn.name.split("_")[0]
     p1y, p1x = get_motion_correction_crop_xy_range_from_both_planes(oeid, paired_id, input_dir)
     signal_mean = signal_mean[
         p1y[0] + motion_buffer : p1y[1] - motion_buffer,
