@@ -355,6 +355,8 @@ if __name__ == "__main__":
     oeid2 = oeid2_input_dir.name
     oeid1_output_dir = make_output_dirs(oeid1, output_dir)
     oeid2_output_dir = make_output_dirs(oeid2, output_dir)
+    shutil.copy(oeid1_input_dir / "processing.json", oeid1_output_dir.parent)
+    shutil.copy(oeid2_input_dir / "processing.json", oeid2_output_dir.parent)
     non_rigid = check_non_rigid_registration(oeid1_input_dir)
     block_size = get_block_size(oeid1_input_dir)
     oeid1_reg_to_oeid2_motion_filepath = prepare_cached_paired_plane_movies(
