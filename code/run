@@ -1,6 +1,22 @@
 #!/usr/bin/env bash
 set -ex
 
-ls ../data
 # This is the master script for the capsule. When you click "Reproducible Run", the code in this file will execute.
+ls ../data
+
+# Check if a file matching the pair*.txt pattern exists;
+# if it does, create the corresponding directory and create links to the 2 target locations listed in the file
+if ls /data/pair*.txt 1> /dev/null 2>&1; then
+    file=$(ls /data/pair*.txt)
+    echo "File found: $file"
+    pair_dir=${file%%.txt}
+    mkdir $pair_dir
+    while read -r line; do
+        ln -s $line $pair_dir
+    done < "$file"
+    ls /data/pair*/**
+else
+    echo "No files found with the pattern pair*.txt"
+fi
+
 python -u run_capsule.py "$@"
