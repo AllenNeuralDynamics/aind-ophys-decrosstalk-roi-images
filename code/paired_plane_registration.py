@@ -5,6 +5,7 @@ import numpy as np
 import h5py
 from suite2p.registration import nonrigid
 import shutil
+import cv2
 
 # NOTE: currently this module works in the Session level, someone may want to calculat per
 # experiment
@@ -385,3 +386,54 @@ def episodic_mean_fov(movie_fn, save_dir, max_num_epochs=10, num_frames=1000):
         f.create_dataset("data", data=mean_fov)
 
     return save_path
+
+def save_emf_as_mp4(movie_fn, save_dir, max_num_epochs=10, num_frames=1000):
+    """
+    Calculate the mean FOV image for each epoch in a movie and saves it to an h5 file
+    Parameters
+    ----------
+    movie_fn : str or Path
+        Path to the movie file
+        h5 file
+    save_dir: Path
+        Directory to store the movie
+    max_num_epochs : int
+        Maximum number of epochs to calculate the mean FOV image for
+    num_frames : int
+        Number of frames to average to calculate the mean FOV image
+
+    Returns
+    -------
+    Path to the mean FOV mp4
+    """
+    # Load the movie
+    if not str(movie_fn).endswith(".h5"):
+        raise ValueError("movie_fn must be an h5 file")
+    if not save_dir.is_dir():
+        raise (ValueError("save_dir must be a directory"))
+    with h5py.File(movie_fn, "r") as f:
+        data_length = f["data"].shape[0]
+        num_epochs = min(max_num_epochs, data_length // num_frames)
+        epoch_interval = data_length // (
+            num_epochs + 1
+        )  # +1 to avoid the very first frame (about half of each epoch)
+        num_frames = min(num_frames, epoch_interval)
+        start_frames = [num_frames // 2 + i * epoch_interval for i in range(num_epochs)]
+        assert start_frames[-1] + num_frames < data_length
+
+        # Calculate the mean FOV image for each epoch
+        mean_fov = np.zeros((num_epochs, f["data"].shape[1], f["data"].shape[2]))
+        for i in range(num_epochs):
+            start_frame = start_frames[i]
+            mean_fov[i] = np.mean(f["data"][start_frame : start_frame + num_frames], axis=0)
+    frame_size = (mean_fov.shape[0], mean_fov[1].shape)
+    save_fp = save_dir / f"{movie_fn.stem}_emf_movie.mp4"
+    out = cv2.VideoWriter(save_fp, 
+                      cv2.VideoWriter_fourcc(*'mp4v'), 
+                      1,  # frame rate
+                      frame_size)
+    for image in mean_fov:
+        out.write(image)
+
+    out.release()
+    return save_fp
