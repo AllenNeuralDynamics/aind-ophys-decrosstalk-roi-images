@@ -21,4 +21,5 @@ RUN pip install -U --no-cache-dir \
     scikit-image==0.21.0 \
     scipy==1.10.1 \
     suite2p==0.14.3 \
-    aind-data-schema==0.18.0
+    aind-data-schema==0.18.0 \
+    opencv-python
