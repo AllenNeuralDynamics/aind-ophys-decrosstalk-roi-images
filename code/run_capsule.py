@@ -101,7 +101,6 @@ def decrosstalk_roi_movie(
     paired_oeid_reg_to_oeid_full_fn = next(
         Path("../scratch").glob(f"{paired_oeid}_registered_to_pair.h5")
     )
-    print(output_dir.parent.parent / paired_oeid / "decrosstalk")
     paired_reg_emf_fn = next(
         (output_dir.parent.parent / paired_oeid / "decrosstalk").glob(
             f"{paired_oeid}_registered_to_pair_episodic_mean_fov.h5"
