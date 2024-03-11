@@ -9,7 +9,6 @@ COPY git-askpass /
 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
-        vim=2:8.1.2269-1ubuntu5.20 \
     && rm -rf /var/lib/apt/lists/*
 
 RUN pip install -U --no-cache-dir \
@@ -22,4 +21,4 @@ RUN pip install -U --no-cache-dir \
     scipy==1.10.1 \
     suite2p==0.14.3 \
     aind-data-schema==0.18.0 \
-    opencv-python
+    opencv-python==4.8.1.78 \
