@@ -58,7 +58,6 @@ def write_output_metadata(
     print(f"Output filepath: {output_fp}")
     with open(output_fp.parent.parent / "processing.json", "r") as f:
         proc_data = json.load(f)
-    processing.write_standard_file(output_directory=Path(output_fp.parent.parent))
     with open(output_fp.parent.parent / "processing.json", "r") as f:
         dct_data = json.load(f)
     try:
@@ -102,8 +101,6 @@ def decrosstalk_roi_movie(
     paired_oeid_reg_to_oeid_full_fn = next(
         Path("../scratch").glob(f"{paired_oeid}_registered_to_pair.h5")
     )
-    print(output_dir)
-    shutil.copy(oeid_mt, output_dir)
     print(output_dir.parent.parent / paired_oeid / "decrosstalk")
     paired_reg_emf_fn = next(
         (output_dir.parent.parent / paired_oeid / "decrosstalk").glob(
@@ -120,10 +117,7 @@ def decrosstalk_roi_movie(
     ) = dri.decrosstalk_roi_image_from_episodic_mean_fov(oeid, paired_reg_emf_fn, input_dir.parent)
     alpha = np.mean(alpha_list)
     beta = np.mean(beta_list)
-    print(alpha)
     metadata = {
-        "alpha_list": alpha_list,
-        "beta_list": beta_list,
         "mean_norm_mi_list": mean_norm_mi_list,
         "alpha_mean": alpha,
         "beta_mean": beta,
