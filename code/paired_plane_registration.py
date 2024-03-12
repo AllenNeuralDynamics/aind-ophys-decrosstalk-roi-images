@@ -430,7 +430,7 @@ def save_emf_as_mp4(movie_fn, save_dir, max_num_epochs=10, num_frames=1000):
     frame_size = (mean_fov.shape[0], mean_fov.shape[1])
     save_fp = save_dir / f"{movie_fn.stem}_emf_movie.mp4"
     out = cv2.VideoWriter(str(save_fp), 
-                      fourcc = cv2.VideoWriter_fourcc(*'mp4v'), 
+                      fourcc = cv2.VideoWriter_fourcc(*'H264'), 
                       fps = 1,
                       frameSize = frame_size)
     for image in mean_fov:
