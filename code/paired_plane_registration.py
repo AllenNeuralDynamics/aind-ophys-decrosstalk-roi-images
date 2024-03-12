@@ -426,6 +426,7 @@ def save_emf_as_mp4(movie_fn, save_dir, max_num_epochs=10, num_frames=1000):
         for i in range(num_epochs):
             start_frame = start_frames[i]
             mean_fov[i] = np.mean(f["data"][start_frame : start_frame + num_frames], axis=0)
+    mean_fov = mean_fov.astype(np.uint8)
     frame_size = (mean_fov.shape[0], mean_fov.shape[1])
     save_fp = save_dir / f"{movie_fn.stem}_emf_movie.mp4"
     out = cv2.VideoWriter(str(save_fp), 

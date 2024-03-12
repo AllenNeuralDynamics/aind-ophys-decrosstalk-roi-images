@@ -21,4 +21,4 @@ else
     echo "No files found with the pattern pair*.txt"
 fi
 
-# python -u run_capsule.py "$@"
+python -u run_capsule.py "$@"
