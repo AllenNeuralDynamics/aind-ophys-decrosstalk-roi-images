@@ -342,7 +342,6 @@ if __name__ == "__main__":
     input_dir = Path("../data/").resolve()
     output_dir = Path("../results/").resolve()
     experiment_dirs = input_dir.glob("pair*/*")
-    print(list(experiment_dirs))
     oeid1_input_dir = next(experiment_dirs)
     oeid2_input_dir = next(experiment_dirs)
     oeid1 = oeid1_input_dir.name
