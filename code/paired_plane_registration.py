@@ -382,7 +382,7 @@ def episodic_mean_fov(movie_fn, save_dir, max_num_epochs=10, num_frames=1000, sa
             start_frame = start_frames[i]
             mean_fov[i] = np.mean(f["data"][start_frame : start_frame + num_frames], axis=0)
     save_path = save_dir / f"{movie_fn.stem}_episodic_mean_fov.h5"
-    webm_path = save_dr / f"{movie_fn.stem}_episodic_mean_fov.webm"
+    webm_path = save_dir / f"{movie_fn.stem}_episodic_mean_fov.webm"
     with h5py.File(save_path, "w") as f:
         f.create_dataset("data",  data=mean_fov)
     if save_webm:
