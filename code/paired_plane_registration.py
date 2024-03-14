@@ -5,8 +5,7 @@ import numpy as np
 import h5py
 from suite2p.registration import nonrigid
 import shutil
-import cv2
-
+from aind_ophys_utils.video_utils import encode_video
 # NOTE: currently this module works in the Session level, someone may want to calculat per
 # experiment
 # TODO: implement per experiment level
@@ -342,7 +341,7 @@ def histogram_shifts(expt1_shifts, expt2_shifts):
     plt.show()
 
 
-def episodic_mean_fov(movie_fn, save_dir, max_num_epochs=10, num_frames=1000):
+def episodic_mean_fov(movie_fn, save_dir, max_num_epochs=10, num_frames=1000, save_webm=False):
     """
     Calculate the mean FOV image for each epoch in a movie and saves it to an h5 file
     Parameters
@@ -356,7 +355,8 @@ def episodic_mean_fov(movie_fn, save_dir, max_num_epochs=10, num_frames=1000):
         Maximum number of epochs to calculate the mean FOV image for
     num_frames : int
         Number of frames to average to calculate the mean FOV image
-
+    save_webm: bool
+        Save webm or not
     Returns
     -------
     Path to the mean FOV image h5 file
@@ -382,59 +382,9 @@ def episodic_mean_fov(movie_fn, save_dir, max_num_epochs=10, num_frames=1000):
             start_frame = start_frames[i]
             mean_fov[i] = np.mean(f["data"][start_frame : start_frame + num_frames], axis=0)
     save_path = save_dir / f"{movie_fn.stem}_episodic_mean_fov.h5"
+    webm_path = save_dr / f"{movie_fn.stem}_episodic_mean_fov.webm"
     with h5py.File(save_path, "w") as f:
-        f.create_dataset("data", data=mean_fov)
-
+        f.create_dataset("data",  data=mean_fov)
+    if save_webm:
+        encode_video(mean_fov, str(webm_path), 3)
     return save_path
-
-def save_emf_as_mp4(movie_fn, save_dir, max_num_epochs=10, num_frames=1000):
-    """
-    Calculate the mean FOV image for each epoch in a movie and saves it to an h5 file
-    Parameters
-    ----------
-    movie_fn : str or Path
-        Path to the movie file
-        h5 file
-    save_dir: Path
-        Directory to store the movie
-    max_num_epochs : int
-        Maximum number of epochs to calculate the mean FOV image for
-    num_frames : int
-        Number of frames to average to calculate the mean FOV image
-
-    Returns
-    -------
-    Path to the mean FOV mp4
-    """
-    # Load the movie
-    if not str(movie_fn).endswith(".h5"):
-        raise ValueError("movie_fn must be an h5 file")
-    if not save_dir.is_dir():
-        raise (ValueError("save_dir must be a directory"))
-    with h5py.File(movie_fn, "r") as f:
-        data_length = f["data"].shape[0]
-        num_epochs = min(max_num_epochs, data_length // num_frames)
-        epoch_interval = data_length // (
-            num_epochs + 1
-        )  # +1 to avoid the very first frame (about half of each epoch)
-        num_frames = min(num_frames, epoch_interval)
-        start_frames = [num_frames // 2 + i * epoch_interval for i in range(num_epochs)]
-        assert start_frames[-1] + num_frames < data_length
-
-        # Calculate the mean FOV image for each epoch
-        mean_fov = np.zeros((num_epochs, f["data"].shape[1], f["data"].shape[2]))
-        for i in range(num_epochs):
-            start_frame = start_frames[i]
-            mean_fov[i] = np.mean(f["data"][start_frame : start_frame + num_frames], axis=0)
-    mean_fov = mean_fov.astype(np.uint8)
-    frame_size = (mean_fov.shape[0], mean_fov.shape[1])
-    save_fp = save_dir / f"{movie_fn.stem}_emf_movie.mp4"
-    out = cv2.VideoWriter(str(save_fp), 
-                      fourcc = cv2.VideoWriter_fourcc(*'mp4v'), 
-                      fps = 1,
-                      frameSize = frame_size)
-    for image in mean_fov:
-        out.write(image)
-
-    out.release()
-    return save_fp

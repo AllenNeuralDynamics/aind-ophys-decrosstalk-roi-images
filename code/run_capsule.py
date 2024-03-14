@@ -305,8 +305,7 @@ def run_decrosstalk(
     logging.info(f"Creating movie...")
     # run decrosstalk
     decrosstalk = decrosstalk_roi_movie(oeid, paired_oeid, input_dir, output_dir, start_time)
-    ppr.episodic_mean_fov(decrosstalk, output_dir, num_frames=num_frames)
-    ppr.save_emf_as_mp4(decrosstalk, output_dir, num_frames=num_frames)
+    ppr.episodic_mean_fov(decrosstalk, output_dir, num_frames=num_frames, save_webm=True)
 
 def make_output_dirs(oeid: str, output_dir: Path) -> Path:
     """
