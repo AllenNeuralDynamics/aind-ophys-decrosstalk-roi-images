@@ -10,9 +10,11 @@ if ls /data/pair*.txt 1> /dev/null 2>&1; then
     file=$(ls /data/pair*.txt)
     echo "File found: $file"
     pair_dir=${file%%.txt}
+    log_file="$pair_dir/link_errors.log"
     mkdir $pair_dir
+    ls $pair_dir
     while read -r line; do
-        ln -s $line $pair_dir
+	ln -s $line $pair_dir
     done < "$file"
     ls /data/pair*/**
 else

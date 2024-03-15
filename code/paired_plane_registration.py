@@ -5,7 +5,7 @@ import numpy as np
 import h5py
 from suite2p.registration import nonrigid
 import shutil
-
+from aind_ophys_utils.video_utils import encode_video
 # NOTE: currently this module works in the Session level, someone may want to calculat per
 # experiment
 # TODO: implement per experiment level
@@ -341,7 +341,7 @@ def histogram_shifts(expt1_shifts, expt2_shifts):
     plt.show()
 
 
-def episodic_mean_fov(movie_fn, save_dir, max_num_epochs=10, num_frames=1000):
+def episodic_mean_fov(movie_fn, save_dir, max_num_epochs=10, num_frames=1000, save_webm=False):
     """
     Calculate the mean FOV image for each epoch in a movie and saves it to an h5 file
     Parameters
@@ -355,7 +355,8 @@ def episodic_mean_fov(movie_fn, save_dir, max_num_epochs=10, num_frames=1000):
         Maximum number of epochs to calculate the mean FOV image for
     num_frames : int
         Number of frames to average to calculate the mean FOV image
-
+    save_webm: bool
+        Save webm or not
     Returns
     -------
     Path to the mean FOV image h5 file
@@ -381,7 +382,9 @@ def episodic_mean_fov(movie_fn, save_dir, max_num_epochs=10, num_frames=1000):
             start_frame = start_frames[i]
             mean_fov[i] = np.mean(f["data"][start_frame : start_frame + num_frames], axis=0)
     save_path = save_dir / f"{movie_fn.stem}_episodic_mean_fov.h5"
+    webm_path = save_dir / f"{movie_fn.stem}_episodic_mean_fov.webm"
     with h5py.File(save_path, "w") as f:
-        f.create_dataset("data", data=mean_fov)
-
+        f.create_dataset("data",  data=mean_fov)
+    if save_webm:
+        encode_video(mean_fov, str(webm_path), 3)
     return save_path

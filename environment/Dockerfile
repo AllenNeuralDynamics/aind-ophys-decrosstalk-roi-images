@@ -1,5 +1,6 @@
-# hash:sha256:b4e0a3b4c8c473b3aaba38813f6db6c5d75f5198b382e43d64dc55a7ad32540b
-FROM registry.codeocean.allenneuraldynamics.org/codeocean/jupyterlab:3.0.9-miniconda4.9.2-python3.8-ubuntu20.04
+# hash:sha256:e5934ed2fcbe4d0a3a39ed02adefa811e88c23f158d0fb52c3253a6c91ae83dd
+ARG REGISTRY_HOST
+FROM $REGISTRY_HOST/codeocean/jupyterlab:3.0.9-miniconda4.9.2-python3.8-ubuntu20.04
 
 ARG DEBIAN_FRONTEND=noninteractive
 
@@ -9,16 +10,19 @@ COPY git-askpass /
 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
+        python3-opencv=4.2.0+dfsg-5 \
+        vim=2:8.1.2269-1ubuntu5.21 \
     && rm -rf /var/lib/apt/lists/*
 
 RUN pip install -U --no-cache-dir \
+    aind-data-schema==0.18.0 \
+    aind-ophys-utils==0.0.7 \
     cellpose==2.2.3 \
     h5py==3.10.0 \
     matplotlib==3.7.3 \
     numpy==1.24.4 \
+    opencv-python==4.9.0.80 \
     pandas==2.0.3 \
     scikit-image==0.21.0 \
     scipy==1.10.1 \
-    suite2p==0.14.3 \
-    aind-data-schema==0.18.0 \
-    opencv-python==4.8.1.78 \
+    suite2p==0.14.3
