@@ -329,8 +329,8 @@ def make_output_dirs(oeid: str, output_dir: Path) -> Path:
     results_dir.mkdir(exist_ok=True)
     results_dir = output_dir / oeid / "decrosstalk"
     results_dir.mkdir(exist_ok=True)
-    with open(experiment_id, "w") as f:
-        f.write(experiment_id)
+    with open(results_dir / oeid, "w") as f:
+        f.write(oeid)
     return results_dir
 
 
