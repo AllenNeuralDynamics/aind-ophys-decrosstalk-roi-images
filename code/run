@@ -20,5 +20,7 @@ if ls /data/pair*.txt 1> /dev/null 2>&1; then
 else
     echo "No files found with the pattern pair*.txt"
 fi
+ls /data/
+ls /data/*/*
 ls /data/pair*/*/motion_correction
 python -u run_capsule.py "$@"
