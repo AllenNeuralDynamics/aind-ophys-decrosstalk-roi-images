@@ -16,10 +16,9 @@ if ls /data/pair*.txt 1> /dev/null 2>&1; then
     while read -r line; do
 	ln -s $line $pair_dir
     done < "$file"
-    ls /data/pair*/**
 else
     echo "No files found with the pattern pair*.txt"
 fi
-ls /data/
-ls /data/*/*
+ls /data/pair*/
+ls /data/pair*/*
 python -u run_capsule.py "$@"
