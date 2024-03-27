@@ -199,7 +199,7 @@ def prepare_cached_paired_plane_movies(
         path to cached paired plane movie
     """
     h5_file = input_dir / 'motion_correction' / f"{oeid1}.h5"
-    oeid_mt = input_dir.parent / oeid2 / 'motion_correction' / f"{oeid2}
+    oeid_mt = input_dir.parent / oeid2 / 'motion_correction' / f"{oeid2}"
     if not h5_file.is_file():
         h5_file = input_dir.parent.parent / f"{oeid1}.h5"
         oeid_mt = input_dir.parent.parent / f"{oeid2}_motion_transform.csv"
