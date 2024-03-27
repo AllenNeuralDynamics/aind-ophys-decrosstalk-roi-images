@@ -22,5 +22,4 @@ else
 fi
 ls /data/
 ls /data/*/*
-ls /data/pair*/*/motion_correction
 python -u run_capsule.py "$@"
