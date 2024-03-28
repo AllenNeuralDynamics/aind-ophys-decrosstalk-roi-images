@@ -190,6 +190,7 @@ def paired_plane_cached_movie(
     """
 
     with h5py.File(h5_file, "r") as f:
+        print(f"~~~~~~~~~H5 File{h5_file}")
         data_length = f["data"].shape[0]
         start_frames = np.arange(0, data_length, chunk_size)
         end_frames = np.append(start_frames[1:], data_length)
