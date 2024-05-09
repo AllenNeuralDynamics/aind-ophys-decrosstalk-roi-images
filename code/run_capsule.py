@@ -217,7 +217,7 @@ def get_processing_json(input_dir: Path) -> dict:
     pj: dict
         processing json
     """
-    processing_json = next(input_dir.glob("processing.json"))
+    processing_json = next(input_dir.glob("*/processing.json"))
     with open(processing_json, "r") as f:
         pj = json.load(f)
     return pj
