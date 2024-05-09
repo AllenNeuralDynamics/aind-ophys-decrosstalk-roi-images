@@ -2,7 +2,6 @@
 from pathlib import Path
 import h5py as h5
 import logging
-import shutil
 import numpy as np
 import paired_plane_registration as ppr
 import decrosstalk_roi_image as dri
@@ -39,7 +38,6 @@ def write_output_metadata(
     print(f"~~~~~~~~~~~~~~~~~~INPUT {input_fp}")
     print(f"~~~~~~~~~~~~~~~~~~OUTPUT {output_fp}")
     original_proc_file = input_fp.parent
-    print(f"Output filepath: {output_fp}")
     with open(original_proc_file / "processing.json", "r") as f:
         proc_data = json.load(f)
     processing = Processing(
@@ -162,7 +160,7 @@ def decrosstalk_roi_movie(
         chunk_no += 1
     write_output_metadata(
         metadata,
-        input_dir / oeid / f"{oeid}_registered.h5",
+        input_dir / "motion_correction" / f"{oeid}_registered.h5",
         decrosstalk_fn,
         "https://github.com/AllenNeuralDynamics/aind-ophys-decrosstalk-roi-images/tree/development",
         start_time,
