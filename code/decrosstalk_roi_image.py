@@ -198,8 +198,7 @@ def decrosstalk_roi_image_single_pair_from_episodic_mean_fov(
         signal_mean = f["data"][start_frame : start_frame + 1].mean(axis=0)
     with h5py.File(paired_reg_emf_fn, "r") as f:
         paired_mean = f["data"][start_frame : start_frame + 1].mean(axis=0)
-
-    paired_id = paired_reg_emf_fn.name.split("_")[0]
+    paired_id = paired_reg_emf_fn.parent.parent.name
     p1y, p1x = get_motion_correction_crop_xy_range_from_both_planes(oeid, paired_id, input_dir)
     signal_mean = signal_mean[
         p1y[0] + motion_buffer : p1y[1] - motion_buffer,
