@@ -36,41 +36,35 @@ def write_output_metadata(
     url: str
         url to code repository
     """
+    print(f"~~~~~~~~~~~~~~~~~~INPUT {input_fp}")
+    print(f"~~~~~~~~~~~~~~~~~~OUTPUT {output_fp}")
+    original_proc_file = input_fp.parent
+    print(f"Output filepath: {output_fp}")
+    with open(original_proc_file / "processing.json", "r") as f:
+        proc_data = json.load(f)
     processing = Processing(
         processing_pipeline=PipelineProcess(
             processor_full_name="Multplane Ophys Processing Pipeline",
             pipeline_url="https://codeocean.allenneuraldynamics.org/capsule/5472403/tree",
             pipeline_version="0.1.0",
             data_processes=[
-                DataProcess(
-                    name=ProcessName.VIDEO_PLANE_DECROSSTALK,
-                    software_version="0.1.0",
-                    start_date_time=start_date_time,  # TODO: Add actual dt
-                    end_date_time=dt.now(tz.utc),  # TODO: Add actual dt
-                    input_location=str(input_fp),
-                    output_location=str(output_fp),
-                    code_url=(url),
-                    parameters=metadata,
+                proc_data["processing_pipeline"]["data_processes"].append(
+                    DataProcess(
+                        name=ProcessName.VIDEO_PLANE_DECROSSTALK,
+                        software_version="0.1.0",
+                        start_date_time=start_date_time,  # TODO: Add actual dt
+                        end_date_time=dt.now(tz.utc),  # TODO: Add actual dt
+                        input_location=str(input_fp),
+                        output_location=str(output_fp),
+                        code_url=(url),
+                        parameters=metadata,
+                    )
                 )
             ],
         )
     )
-    print(f"Output filepath: {output_fp}")
-    with open(output_fp.parent.parent / "processing.json", "r") as f:
-        proc_data = json.load(f)
+   
     processing.write_standard_file(output_directory=Path(output_fp).parent.parent)
-    # load up data just written
-    with open(output_fp.parent.parent / "processing.json", "r") as f:
-        dct_data = json.load(f)
-    try:
-        proc_data["processing_pipeline"]["data_processes"].append(
-            dct_data["processing_pipeline"]["data_processes"][0]
-        )
-    except KeyError:
-        proc_data["data_processes"].append(dct_data["processing_pipeline"]["data_processes"][0])
-    with open(output_fp.parent.parent / "processing.json", "w") as f:
-        json.dump(proc_data, f, indent=4)
-
 
 def decrosstalk_roi_movie(
     oeid: str, paired_oeid: str, input_dir: Path, output_dir: Path, start_time: dt
@@ -352,8 +346,6 @@ if __name__ == "__main__":
     oeid2 = oeid2_input_dir.name
     oeid1_output_dir = make_output_dirs(oeid1, output_dir)
     oeid2_output_dir = make_output_dirs(oeid2, output_dir)
-    shutil.copy(oeid1_input_dir / "processing.json", oeid1_output_dir.parent)
-    shutil.copy(oeid2_input_dir / "processing.json", oeid2_output_dir.parent)
     non_rigid = check_non_rigid_registration(oeid1_input_dir)
     block_size = get_block_size(oeid1_input_dir)
     oeid1_reg_to_oeid2_motion_filepath = prepare_cached_paired_plane_movies(
