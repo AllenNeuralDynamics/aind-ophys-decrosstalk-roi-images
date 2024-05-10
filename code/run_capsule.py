@@ -35,8 +35,6 @@ def write_output_metadata(
     url: str
         url to code repository
     """
-    print(f"~~~~~~~~~~~~~~~~~~INPUT {input_fp}")
-    print(f"~~~~~~~~~~~~~~~~~~OUTPUT {output_fp}")
     original_proc_file = input_fp.parent
     with open(original_proc_file / "processing.json", "r") as f:
         proc_data = json.load(f)
@@ -60,6 +58,7 @@ def write_output_metadata(
         )
     )
     processing.processing_pipeline.data_processes.append(proc_data["processing_pipeline"]["data_processes"])
+    print(f"~~~~~~~~~~~~~{output_fp.parene}")
     processing.write_standard_file(output_directory=Path(output_fp).parent)
 
 def decrosstalk_roi_movie(
