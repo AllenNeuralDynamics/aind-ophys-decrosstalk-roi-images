@@ -46,7 +46,6 @@ def write_output_metadata(
             pipeline_url="https://codeocean.allenneuraldynamics.org/capsule/5472403/tree",
             pipeline_version="0.1.0",
             data_processes=[
-                proc_data["processing_pipeline"]["data_processes"].append(
                     DataProcess(
                         name=ProcessName.VIDEO_PLANE_DECROSSTALK,
                         software_version="0.1.0",
@@ -57,12 +56,11 @@ def write_output_metadata(
                         code_url=(url),
                         parameters=metadata,
                     )
-                )
-            ],
+                    ],
         )
     )
-   
-    processing.write_standard_file(output_directory=Path(output_fp).parent.parent)
+    processing.processing_pipeline.data_processes.append(proc_data["processing_pipeline"]["data_processes"])
+    processing.write_standard_file(output_directory=Path(output_fp).parent)
 
 def decrosstalk_roi_movie(
     oeid: str, paired_oeid: str, input_dir: Path, output_dir: Path, start_time: dt
