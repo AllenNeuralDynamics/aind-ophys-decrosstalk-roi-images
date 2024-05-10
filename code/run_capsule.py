@@ -58,7 +58,7 @@ def write_output_metadata(
         )
     )
     processing.processing_pipeline.data_processes.append(proc_data["processing_pipeline"]["data_processes"])
-    print(f"~~~~~~~~~~~~~{output_fp.parene}")
+    print(f"~~~~~~~~~~~~~{output_fp.parent}")
     processing.write_standard_file(output_directory=Path(output_fp).parent)
 
 def decrosstalk_roi_movie(
