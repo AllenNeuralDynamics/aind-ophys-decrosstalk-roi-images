@@ -6,6 +6,7 @@ import h5py
 from suite2p.registration import nonrigid
 import shutil
 from aind_ophys_utils.video_utils import encode_video
+
 # NOTE: currently this module works in the Session level, someone may want to calculat per
 # experiment
 # TODO: implement per experiment level
@@ -83,7 +84,7 @@ def generate_mean_episodic_fov_pairings_registered_frames(
         paired_plane_data[oeid] = {}
         # if (input_dir / oeid / f"{oeid}.h5").is_file():
         paired_plane_data[oeid]["raw_movie_fp"] = input_dir / oeid / f"{oeid}.h5"
-        # else: 
+        # else:
         #     paired_plane_data[oeid]["raw_movie_fp"] = input_dir / f"{oeid}.h5"
     # to tie the paired suite2p rigid motion transform to the correct oeid
     paired_plane_data[oeids[0]]["paired_motion_df"] = get_s2p_motion_transform(
@@ -115,7 +116,9 @@ def generate_mean_episodic_fov_pairings_registered_frames(
                 num_epochs + 1
             )  # +1 to avoid the very first frame (about half of each epoch)
             num_frames = min(num_frames, epoch_interval)
-            start_frames = [num_frames // 2 + i * epoch_interval for i in range(num_epochs)]
+            start_frames = [
+                num_frames // 2 + i * epoch_interval for i in range(num_epochs)
+            ]
             assert start_frames[-1] + num_frames < data_length
 
             # Calculate the mean FOV image for each epoch, after paired plane registration
@@ -130,12 +133,12 @@ def generate_mean_episodic_fov_pairings_registered_frames(
                     start_frame : start_frame + num_frames
                 ]
                 if "nonrigid_x" in paired_plane_data[k]["paired_motion_df"]:
-                    nonrigid_y = paired_plane_data[k]["paired_motion_df"]["nonrigid_y"].values[
-                        start_frame : start_frame + num_frames
-                    ]
-                    nonrigid_x = paired_plane_data[k]["paired_motion_df"]["nonrigid_x"].values[
-                        start_frame : start_frame + num_frames
-                    ]
+                    nonrigid_y = paired_plane_data[k]["paired_motion_df"][
+                        "nonrigid_y"
+                    ].values[start_frame : start_frame + num_frames]
+                    nonrigid_x = paired_plane_data[k]["paired_motion_df"][
+                        "nonrigid_x"
+                    ].values[start_frame : start_frame + num_frames]
                     # from default parameters:
                     # TODO: read from a file
                     Ly1 = 512
@@ -245,10 +248,14 @@ def paired_plane_cached_movie(
                         maxshape=(None, 512, 512),
                         chunks=(1000, 512, 512),
                     )
-                    cache_f["data"].resize((f["data"].shape[0] + r_frames.shape[0]), axis=0)
+                    cache_f["data"].resize(
+                        (f["data"].shape[0] + r_frames.shape[0]), axis=0
+                    )
                     cache_f["data"][start_frame:end_frame] = r_frames
                 else:
-                    cache_f["data"].resize((f["data"].shape[0] + r_frames.shape[0]), axis=0)
+                    cache_f["data"].resize(
+                        (f["data"].shape[0] + r_frames.shape[0]), axis=0
+                    )
                     cache_f["data"][start_frame:end_frame] = r_frames
     return temp_path
 
@@ -301,22 +308,32 @@ def fig_paired_planes_registered_projections(projections_dict: dict):
     ]
 
     # check that all keys are in dict
-    assert all([k in projections_dict.keys() for k in keys]), "missing keys in projections_dict"
+    assert all(
+        [k in projections_dict.keys() for k in keys]
+    ), "missing keys in projections_dict"
 
     # subplots show all images
     fig, ax = plt.subplots(2, 3, figsize=(10, 10))
     ax[0, 0].imshow(projections_dict["plane1_raw"], cmap="gray", vmax=max_val)
     ax[0, 0].set_title("plane 1 raw")
-    ax[0, 1].imshow(projections_dict["plane1_original_registered"], cmap="gray", vmax=max_val)
+    ax[0, 1].imshow(
+        projections_dict["plane1_original_registered"], cmap="gray", vmax=max_val
+    )
     ax[0, 1].set_title("plane 1 orignal registered")
-    ax[0, 2].imshow(projections_dict["plane1_paired_registered"], cmap="gray", vmax=max_val)
+    ax[0, 2].imshow(
+        projections_dict["plane1_paired_registered"], cmap="gray", vmax=max_val
+    )
     ax[0, 2].set_title("plane 1 registered to plane 2")
 
     ax[1, 0].imshow(projections_dict["plane2_raw"], cmap="gray")
     ax[1, 0].set_title("plane 2 raw")
-    ax[1, 1].imshow(projections_dict["plane2_original_registered"], cmap="gray", vmax=max_val)
+    ax[1, 1].imshow(
+        projections_dict["plane2_original_registered"], cmap="gray", vmax=max_val
+    )
     ax[1, 1].set_title("plane 2 original registered")
-    ax[1, 2].imshow(projections_dict["plane2_paired_registered"], cmap="gray", vmax=max_val)
+    ax[1, 2].imshow(
+        projections_dict["plane2_paired_registered"], cmap="gray", vmax=max_val
+    )
     ax[1, 2].set_title("plane 2 registered to plane 1")
 
     # turn off axis labels
@@ -345,7 +362,9 @@ def histogram_shifts(expt1_shifts, expt2_shifts):
     plt.show()
 
 
-def episodic_mean_fov(movie_fn, save_dir, max_num_epochs=10, num_frames=1000, save_webm=False):
+def episodic_mean_fov(
+    movie_fn, save_dir, max_num_epochs=10, num_frames=1000, save_webm=False
+):
     """
     Calculate the mean FOV image for each epoch in a movie and saves it to an h5 file
     Parameters
@@ -384,11 +403,13 @@ def episodic_mean_fov(movie_fn, save_dir, max_num_epochs=10, num_frames=1000, sa
         mean_fov = np.zeros((num_epochs, f["data"].shape[1], f["data"].shape[2]))
         for i in range(num_epochs):
             start_frame = start_frames[i]
-            mean_fov[i] = np.mean(f["data"][start_frame : start_frame + num_frames], axis=0)
+            mean_fov[i] = np.mean(
+                f["data"][start_frame : start_frame + num_frames], axis=0
+            )
     save_path = save_dir / f"{movie_fn.stem}_episodic_mean_fov.h5"
     webm_path = save_dir / f"{movie_fn.stem}_episodic_mean_fov.webm"
     with h5py.File(save_path, "w") as f:
-        f.create_dataset("data",  data=mean_fov)
+        f.create_dataset("data", data=mean_fov)
     if save_webm:
         encode_video(mean_fov, str(webm_path), 3)
     return save_path

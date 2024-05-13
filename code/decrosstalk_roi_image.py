@@ -24,7 +24,9 @@ def get_motion_correction_crop_xy_range_from_both_planes(oeid, paired_id, input_
         Lists of y range and x range, [start, end] pixel index
     """
     xrange_og, yrange_og = get_motion_correction_crop_xy_range(oeid, input_dir)
-    xrange_paired, yrange_paired = get_motion_correction_crop_xy_range(paired_id, input_dir)
+    xrange_paired, yrange_paired = get_motion_correction_crop_xy_range(
+        paired_id, input_dir
+    )
 
     xrange = [max(xrange_og[0], xrange_paired[0]), min(xrange_og[1], xrange_paired[1])]
     yrange = [max(yrange_og[0], yrange_paired[0]), min(yrange_og[1], yrange_paired[1])]
@@ -49,7 +51,9 @@ def get_motion_correction_crop_xy_range(oeid, input_dir):
         Lists of y range and x range, [start, end] pixel index
     """
     # TODO: validate in case where max < 0 or min > 0 (if there exists an example)
-    suite2p_rigid_motion_transform_csv = input_dir / oeid / 'motion_correction' / f"{oeid}_motion_transform.csv"
+    suite2p_rigid_motion_transform_csv = (
+        input_dir / oeid / "motion_correction" / f"{oeid}_motion_transform.csv"
+    )
     motion_df = pd.read_csv(
         suite2p_rigid_motion_transform_csv
     )  # this is suite2p rigid motion transform csv file
@@ -105,7 +109,10 @@ def decrosstalk_roi_image_from_episodic_mean_fov(
 
     # Assign start frames for each epoch
     signal_fn = (
-        Path("../results") / oeid / "decrosstalk" / f"{oeid}_registered_episodic_mean_fov.h5"
+        Path("../results")
+        / oeid
+        / "decrosstalk"
+        / f"{oeid}_registered_episodic_mean_fov.h5"
     )
     with h5py.File(signal_fn, "r") as f:
         data_length = f["data"].shape[0]
@@ -116,7 +123,11 @@ def decrosstalk_roi_image_from_episodic_mean_fov(
     beta_list = []
     mean_norm_mi_list = []
     for start_frame in start_frames:
-        alpha, beta, mean_norm_mi_values = decrosstalk_roi_image_single_pair_from_episodic_mean_fov(
+        (
+            alpha,
+            beta,
+            mean_norm_mi_values,
+        ) = decrosstalk_roi_image_single_pair_from_episodic_mean_fov(
             oeid,
             paired_reg_fn,
             input_dir,
@@ -192,14 +203,19 @@ def decrosstalk_roi_image_single_pair_from_episodic_mean_fov(
         mean normalized mutual information values
     """
     signal_fn = (
-        Path("../results") / oeid / "decrosstalk" / f"{oeid}_registered_episodic_mean_fov.h5"
+        Path("../results")
+        / oeid
+        / "decrosstalk"
+        / f"{oeid}_registered_episodic_mean_fov.h5"
     )
     with h5py.File(signal_fn, "r") as f:
         signal_mean = f["data"][start_frame : start_frame + 1].mean(axis=0)
     with h5py.File(paired_reg_emf_fn, "r") as f:
         paired_mean = f["data"][start_frame : start_frame + 1].mean(axis=0)
     paired_id = paired_reg_emf_fn.parent.parent.name
-    p1y, p1x = get_motion_correction_crop_xy_range_from_both_planes(oeid, paired_id, input_dir)
+    p1y, p1x = get_motion_correction_crop_xy_range_from_both_planes(
+        oeid, paired_id, input_dir
+    )
     signal_mean = signal_mean[
         p1y[0] + motion_buffer : p1y[1] - motion_buffer,
         p1x[0] + motion_buffer : p1x[1] - motion_buffer,
@@ -303,13 +319,17 @@ def get_signal_paired_top_masks(
     signal_masks_dendrite_filtered = filter_dendrite(
         signal_masks, dendrite_diameter_pix=dendrite_diameter_px
     )
-    signal_masks_filtered = filter_border_roi(signal_masks_dendrite_filtered, buffer_pix=nrshiftmax)
+    signal_masks_filtered = filter_border_roi(
+        signal_masks_dendrite_filtered, buffer_pix=nrshiftmax
+    )
 
     paired_masks, _, _, _ = model.eval(paired_mean, diameter=None, channels=[0, 0])
     paired_masks_dendrite_filtered = filter_dendrite(
         paired_masks, dendrite_diameter_pix=dendrite_diameter_px
     )
-    paired_masks_filtered = filter_border_roi(paired_masks_dendrite_filtered, buffer_pix=nrshiftmax)
+    paired_masks_filtered = filter_border_roi(
+        paired_masks_dendrite_filtered, buffer_pix=nrshiftmax
+    )
 
     signal_masks_filtered = reorder_mask(signal_masks_filtered)
     paired_masks_filtered = reorder_mask(paired_masks_filtered)
@@ -513,11 +533,17 @@ def get_bounding_box(masks, area_extension_factor=2):
         bb_x_tight_len = bb_x_tight[1] - bb_x_tight[0]
         bb_y = [
             max(0, int(np.round(bb_y_tight[0] - bb_extension * bb_y_tight_len / 2))),
-            min(masks.shape[0], int(np.round(bb_y_tight[1] + bb_extension * bb_y_tight_len / 2))),
+            min(
+                masks.shape[0],
+                int(np.round(bb_y_tight[1] + bb_extension * bb_y_tight_len / 2)),
+            ),
         ]
         bb_x = [
             max(0, int(np.round(bb_x_tight[0] - bb_extension * bb_x_tight_len / 2))),
-            min(masks.shape[1], int(np.round(bb_x_tight[1] + bb_extension * bb_x_tight_len / 2))),
+            min(
+                masks.shape[1],
+                int(np.round(bb_x_tight[1] + bb_extension * bb_x_tight_len / 2)),
+            ),
         ]
         bb_masks[i, bb_y[0] : bb_y[1], bb_x[0] : bb_x[1]] = mask_i
     return bb_masks

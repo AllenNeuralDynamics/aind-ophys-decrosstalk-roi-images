@@ -45,21 +45,22 @@ def write_output_metadata(
             pipeline_url="https://codeocean.allenneuraldynamics.org/capsule/5472403/tree",
             pipeline_version="0.1.0",
             data_processes=[
-                    DataProcess(
-                        name=ProcessName.VIDEO_PLANE_DECROSSTALK,
-                        software_version="0.1.0",
-                        start_date_time=start_date_time,  # TODO: Add actual dt
-                        end_date_time=dt.now(tz.utc),  # TODO: Add actual dt
-                        input_location=str(input_fp),
-                        output_location=str(output_fp),
-                        code_url=(url),
-                        parameters=metadata,
-                    )
-                    ],
+                DataProcess(
+                    name=ProcessName.VIDEO_PLANE_DECROSSTALK,
+                    software_version="0.1.0",
+                    start_date_time=start_date_time,  # TODO: Add actual dt
+                    end_date_time=dt.now(tz.utc),  # TODO: Add actual dt
+                    input_location=str(input_fp),
+                    output_location=str(output_fp),
+                    code_url=(url),
+                    parameters=metadata,
+                )
+            ],
         )
     )
     prev_processing.processing_pipeline.data_processes.append(processing.processing_pipeline.data_processes[0])
     prev_processing.write_standard_file(output_directory=Path(output_fp).parent)
+
 
 def decrosstalk_roi_movie(
     oeid: str, paired_oeid: str, input_dir: Path, output_dir: Path, start_time: dt
@@ -88,7 +89,7 @@ def decrosstalk_roi_movie(
     logging.info(f"Input directory, {input_dir}")
     logging.info(f"Output directory, {output_dir}")
     logging.info(f"Ophys experiment ID pairs, {oeid}, {paired_oeid}")
-    oeid_mt = input_dir / 'motion_correction' / f"{oeid}_motion_transform.csv"
+    oeid_mt = input_dir / "motion_correction" / f"{oeid}_motion_transform.csv"
     paired_oeid_reg_to_oeid_full_fn = next(
         Path("../scratch").glob(f"{paired_oeid}_registered_to_pair.h5")
     )
@@ -104,7 +105,9 @@ def decrosstalk_roi_movie(
         alpha_list,
         beta_list,
         mean_norm_mi_list,
-    ) = dri.decrosstalk_roi_image_from_episodic_mean_fov(oeid, paired_reg_emf_fn, input_dir.parent)
+    ) = dri.decrosstalk_roi_image_from_episodic_mean_fov(
+        oeid, paired_reg_emf_fn, input_dir.parent
+    )
     alpha = np.mean(alpha_list)
     beta = np.mean(beta_list)
     metadata = {
@@ -117,7 +120,7 @@ def decrosstalk_roi_movie(
     ## To reduce RAM usage, you can get/save the decrosstalk_data in chunks:
     chunk_size = 5000  # num of frames in each chunk
 
-    with h5.File(input_dir / 'motion_correction' / f"{oeid}_registered.h5", "r") as f:
+    with h5.File(input_dir / "motion_correction" / f"{oeid}_registered.h5", "r") as f:
         data_shape = f["data"].shape
     data_length = data_shape[0]
     start_frames = np.arange(0, data_length, chunk_size)
@@ -130,7 +133,7 @@ def decrosstalk_roi_movie(
     for start_frame, end_frame in zip(start_frames, end_frames):
         with h5.File(paired_oeid_reg_to_oeid_full_fn, "r") as f:
             paired_data = f["data"][start_frame:end_frame]
-        with h5.File(input_dir / 'motion_correction' / f"{oeid}_registered.h5", "r") as f:
+        with h5.File(input_dir / "motion_correction" / f"{oeid}_registered.h5", "r") as f:
             signal_data = f["data"][start_frame:end_frame]
         recon_signal_data = np.zeros_like(signal_data, dtype=np.int16)
         for temp_frame_index in range(signal_data.shape[0]):
@@ -152,7 +155,9 @@ def decrosstalk_roi_movie(
                 f.create_dataset("mean_norm_mi_list", data=mean_norm_mi_list)
         else:
             with h5.File(decrosstalk_fn, "a") as f:
-                f["data"].resize((f["data"].shape[0] + recon_signal_data.shape[0]), axis=0)
+                f["data"].resize(
+                    (f["data"].shape[0] + recon_signal_data.shape[0]), axis=0
+                )
                 f["data"][start_frame:end_frame] = recon_signal_data
         chunk_no += 1
     write_output_metadata(
@@ -187,8 +192,10 @@ def prepare_cached_paired_plane_movies(
     h5_file: Path
         path to cached paired plane movie
     """
-    h5_file = input_dir / 'motion_correction' / f"{oeid1}.h5"
-    oeid_mt = input_dir.parent / oeid2 / 'motion_correction' / f"{oeid2}_motion_transform.csv"
+    h5_file = input_dir / "motion_correction" / f"{oeid1}.h5"
+    oeid_mt = (
+        input_dir.parent / oeid2 / "motion_correction" / f"{oeid2}_motion_transform.csv"
+    )
     if not h5_file.is_file():
         h5_file = input_dir.parent.parent / f"{oeid1}.h5"
         print(f"~~~~~~~~~~~~~~~~~~~~~~~{h5_file}")
@@ -233,9 +240,9 @@ def get_block_size(input_dir: Path) -> list:
     """
     processing_json = get_processing_json(input_dir)
     try:
-        block_size = processing_json["processing_pipeline"]["data_processes"][0]["parameters"]['suite2p_args'][
-            "block_size"
-        ]
+        block_size = processing_json["processing_pipeline"]["data_processes"][0][
+            "parameters"
+        ]["suite2p_args"]["block_size"]
     except KeyError:
         block_size = processing_json["data_processes"][0]["parameters"]["suite2p_args"][
             "block_size"
@@ -258,11 +265,13 @@ def check_non_rigid_registration(input_dir: Path) -> bool:
     """
     processing_json = get_processing_json(input_dir)
     try:
-        nonrigid = processing_json["processing_pipeline"]["data_processes"][0]["parameters"]['suite2p_args'][
+        nonrigid = processing_json["processing_pipeline"]["data_processes"][0][
+            "parameters"
+        ]["suite2p_args"]["nonrigid"]
+    except KeyError:
+        nonrigid = processing_json["data_processes"][0]["parameters"]["suite2p_args"][
             "nonrigid"
         ]
-    except KeyError:
-        nonrigid = processing_json["data_processes"][0]["parameters"]["suite2p_args"]["nonrigid"]
     return nonrigid
 
 
@@ -295,11 +304,16 @@ def run_decrosstalk(
     # create the EMF of the registered to pair movie from cache
 
     # create EMF of the self registered movies
-    ppr.episodic_mean_fov(input_dir / 'motion_correction' / f"{oeid}_registered.h5", output_dir)
+    ppr.episodic_mean_fov(
+        input_dir / "motion_correction" / f"{oeid}_registered.h5", output_dir
+    )
     logging.info(f"Creating movie...")
     # run decrosstalk
-    decrosstalk = decrosstalk_roi_movie(oeid, paired_oeid, input_dir, output_dir, start_time)
+    decrosstalk = decrosstalk_roi_movie(
+        oeid, paired_oeid, input_dir, output_dir, start_time
+    )
     ppr.episodic_mean_fov(decrosstalk, output_dir, num_frames=num_frames, save_webm=True)
+
 
 def make_output_dirs(oeid: str, output_dir: Path) -> Path:
     """
