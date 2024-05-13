@@ -1,4 +1,4 @@
-# hash:sha256:0162e7ecb898cb66440505ad903008d0bbc8e1c6459b7fba8cd7d457857fe65b
+# hash:sha256:1aa94fcefe3399cae1da95cea1f86afb354bbcd84f426793d5d5c13b9264d5ca
 ARG REGISTRY_HOST
 FROM $REGISTRY_HOST/codeocean/jupyterlab:3.0.9-miniconda4.9.2-python3.8-ubuntu20.04
 
@@ -11,7 +11,6 @@ COPY git-askpass /
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
         python3-opencv=4.2.0+dfsg-5 \
-        vim=2:8.1.2269-1ubuntu5.21 \
     && rm -rf /var/lib/apt/lists/*
 
 RUN pip install -U --no-cache-dir \
