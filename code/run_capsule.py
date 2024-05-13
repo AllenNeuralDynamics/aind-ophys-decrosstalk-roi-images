@@ -38,6 +38,7 @@ def write_output_metadata(
     original_proc_file = input_fp.parent
     with open(original_proc_file / "processing.json", "r") as f:
         proc_data = json.load(f)
+    prev_processing = Processing(**proc_data)
     processing = Processing(
         processing_pipeline=PipelineProcess(
             processor_full_name="Multplane Ophys Processing Pipeline",
@@ -57,7 +58,8 @@ def write_output_metadata(
                     ],
         )
     )
-    processing.processing_pipeline.data_processes.append(proc_data["processing_pipeline"]["data_processes"])
+    prev_processing.processing_pipeline.data_processes.append(processing.processing_pipeline.data_processes[0])
+
     print(f"~~~~~~~~~~~~~{output_fp.parent}")
     processing.write_standard_file(output_directory=Path(output_fp).parent)
 
