@@ -111,7 +111,6 @@ def decrosstalk_roi_movie(
     alpha = np.mean(alpha_list)
     beta = np.mean(beta_list)
     metadata = {
-        "mean_norm_mi_list": mean_norm_mi_list,
         "alpha_mean": alpha,
         "beta_mean": beta,
         "paired_emf": str(paired_reg_emf_fn),
