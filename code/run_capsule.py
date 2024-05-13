@@ -7,8 +7,8 @@ import paired_plane_registration as ppr
 import decrosstalk_roi_image as dri
 import shutil
 import json
-from aind_data_schema import Processing
-from aind_data_schema.processing import DataProcess, ProcessName, PipelineProcess
+from aind_data_schema.core.processing import Processing
+from aind_data_schema.core.processing import DataProcess, ProcessName, PipelineProcess
 from typing import Union
 from datetime import datetime as dt
 from datetime import timezone as tz
