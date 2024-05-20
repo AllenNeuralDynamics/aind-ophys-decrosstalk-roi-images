@@ -196,7 +196,7 @@ def prepare_cached_paired_plane_movies(
         input_dir.parent / oeid2 / "motion_correction" / f"{oeid2}_motion_transform.csv"
     )
     if not h5_file.is_file():
-        h5_file = input_dir.parent.parent / f"{oeid1}.h5"
+        h5_file = input_dir.parent.parent / f"{oeid1}_registered.h5"
         print(f"~~~~~~~~~~~~~~~~~~~~~~~{h5_file}")
     transform_df = ppr.get_s2p_motion_transform(oeid_mt)
     return ppr.paired_plane_cached_movie(
