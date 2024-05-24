@@ -209,6 +209,9 @@ def paired_plane_cached_movie(
             blocks = nonrigid.make_blocks(Ly=Ly, Lx=Lx, block_size=block_size)
             ymax1 = np.vstack(reg_df.nonrigid_y.values)
             xmax1 = np.vstack(reg_df.nonrigid_x.values)
+        print(data_length)
+        print(len(y_shifts))
+        print(len(x_shifts))
         assert data_length == len(y_shifts) == len(x_shifts)
         for start_frame, end_frame in zip(start_frames, end_frames):
             r_frames = np.zeros_like(f["data"][start_frame:end_frame], dtype=np.int16)
