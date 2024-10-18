@@ -11,7 +11,6 @@ from aind_data_schema.core.processing import Processing
 from aind_data_schema.core.processing import DataProcess, ProcessName, PipelineProcess
 from typing import Union
 from datetime import datetime as dt
-from datetime import timezone as tz
 import argparse
 
 
@@ -42,14 +41,14 @@ def write_output_metadata(
     processing = Processing(
         processing_pipeline=PipelineProcess(
             processor_full_name="Multplane Ophys Processing Pipeline",
-            pipeline_url="https://codeocean.allenneuraldynamics.org/capsule/5472403/tree",
-            pipeline_version="0.1.0",
+            pipeline_url=os.getenv("PIPELINE_URL", ""),
+            pipeline_version=os.getenv("PIPELINE_VERSION", ""),
             data_processes=[
                 DataProcess(
                     name=ProcessName.VIDEO_PLANE_DECROSSTALK,
-                    software_version="0.1.0",
+                    software_version=os.getenv("VERSION", ""),
                     start_date_time=start_date_time,  # TODO: Add actual dt
-                    end_date_time=dt.now(tz.utc),  # TODO: Add actual dt
+                    end_date_time=dt.now(),  # TODO: Add actual dt
                     input_location=str(input_fp),
                     output_location=str(output_fp),
                     code_url=(url),
@@ -369,9 +368,9 @@ if __name__ == "__main__":
     ppr.episodic_mean_fov(
         oeid2_reg_to_oeid1_motion_filepath, oeid2_output_dir, num_frames=num_frames
     )
-    start_time_oeid1 = dt.now(tz.utc)
+    start_time_oeid1 = dt.now()
     run_decrosstalk(oeid1_input_dir, oeid1_output_dir, oeid1, oeid2, start_time_oeid1)
-    start_time_oeid2 = dt.now(tz.utc)
+    start_time_oeid2 = dt.now()
     run_decrosstalk(oeid2_input_dir, oeid2_output_dir, oeid2, oeid1, start_time_oeid2)
     (Path("../scratch/") / f"{oeid1}_registered_to_pair.h5").unlink()
     print("unlinking paired registered flies")
