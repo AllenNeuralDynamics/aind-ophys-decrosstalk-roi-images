@@ -1,4 +1,4 @@
-# hash:sha256:ec147bf2198ffdf51ad8b53bc7dab939aada55f1677a3a127a5cbcbc97779878
+# hash:sha256:4b863d6cf424898612b4d50327c7059ba375ab3be9d6eb30ad29fca3c3b16b18
 ARG REGISTRY_HOST
 FROM $REGISTRY_HOST/codeocean/jupyterlab:3.0.9-miniconda4.9.2-python3.8-ubuntu20.04
 
@@ -8,9 +8,9 @@ ARG GIT_ASKPASS
 ARG GIT_ACCESS_TOKEN
 COPY git-askpass /
 
-ENV VERSION=3.0
 ENV PIPELINE_URL=https://codeocean.allenneuraldynamics.org/capsule/6127754/tree
 ENV PIPELINE_VERSION=1.0
+ENV VERSION=4.0
 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
