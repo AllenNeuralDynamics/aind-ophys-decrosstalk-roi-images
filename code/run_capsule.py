@@ -12,7 +12,7 @@ from aind_data_schema.core.processing import DataProcess, ProcessName, PipelineP
 from typing import Union
 from datetime import datetime as dt
 import argparse
-
+import os
 
 def write_output_metadata(
     metadata: dict,
