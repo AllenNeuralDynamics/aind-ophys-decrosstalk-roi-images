@@ -190,13 +190,12 @@ def prepare_cached_paired_plane_movies(
     h5_file: Path
         path to cached paired plane movie
     """
-    h5_file = input_dir / "motion_correction" / f"{oeid1}.h5"
-    oeid_mt = (
-        input_dir.parent / oeid2 / "motion_correction" / f"{oeid2}_motion_transform.csv"
-    )
-    if not h5_file.is_file():
-        h5_file = input_dir.parent.parent / f"{oeid1}_registered.h5"
-        print(f"~~~~~~~~~~~~~~~~~~~~~~~{h5_file}")
+    h5_file = next(input_dir.rglob(f"{oeid1}_registered.h5"), "")
+    if not h5_file:
+        raise FileNotFoundError(f"Could not find {oeid1}_registered.h5")
+    oeid_mt = next(input_dir.rglob(f"{oeid2}_motion_transform.csv"), "")
+    if not oeid_mt:
+        raise FileNotFoundError(f"Could not find {oeid2}_motion_transform.csv")
     transform_df = ppr.get_s2p_motion_transform(oeid_mt)
     return ppr.paired_plane_cached_movie(
         h5_file, transform_df, non_rigid=non_rigid, block_size=block_size
