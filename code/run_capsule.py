@@ -190,7 +190,9 @@ def prepare_cached_paired_plane_movies(
     h5_file: Path
         path to cached paired plane movie
     """
-    h5_file = next(input_dir.rglob(f"{oeid1}_registered.h5"), "")
+    print(f"~~~~~~~~~{input_dir}")
+    oied1_input_dir = input_dir.parent / f"{oeid1}"
+    h5_file = next(oeid1_input_dir.rglob(f"{oeid1}_registered.h5"), "")
     if not h5_file:
         raise FileNotFoundError(f"Could not find {oeid1}_registered.h5")
     oeid_mt = next(input_dir.rglob(f"{oeid2}_motion_transform.csv"), "")
