@@ -1,0 +1,13 @@
+{
+	"version": 1,
+	"attached_datasets": [
+		{
+			"id": "1aea539d-d726-4668-837a-50a42c88474b",
+			"mount": "VISp_1"
+		},
+		{
+			"id": "659a4fb7-6300-468b-a619-e7d2cc33fbd6",
+			"mount": "VISp_0"
+		}
+	]
+}
