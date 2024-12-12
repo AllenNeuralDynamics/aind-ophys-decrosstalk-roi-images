@@ -199,7 +199,8 @@ def paired_plane_cached_movie(
     -------
     Path to temporary h5 file
     """
-
+    print("~~~~~~~~~~~")
+    print(h5_file.is_file())
     with h5py.File(h5_file, "r") as f:
         print(f"~~~~~~~~~H5 File{h5_file}")
         data_length = f["data"].shape[0]
