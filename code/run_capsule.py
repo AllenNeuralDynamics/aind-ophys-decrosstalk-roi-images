@@ -90,7 +90,7 @@ def decrosstalk_roi_movie(
     logging.info(f"Ophys experiment ID pairs, {oeid}, {paired_oeid}")
     oeid_mt = input_dir / "motion_correction" / f"{oeid}_motion_transform.csv"
     paired_oeid_reg_to_oeid_full_fn = next(
-        Path("../scratch").glob(f"{paired_oeid}_registered_to_pair.h5")
+        Path("../scratch").rglob(f"{paired_oeid}_registered_to_pair.h5")
     )
     paired_reg_emf_fn = next(
         (output_dir.parent.parent / paired_oeid / "decrosstalk").glob(
@@ -193,9 +193,9 @@ def prepare_cached_paired_plane_movies(
     print(f"~~~~~~~~~{input_dir}")
     oied2_input_dir = input_dir.parent / f"{oeid2}"
     print(f"~~~~~~~~~{oied2_input_dir}")
-    h5_file = next(input_dir.rglob(f"{oeid1}_registered.h5"), "")
+    h5_file = next(input_dir.rglob(f"{oeid1}.h5"), "")
     if not h5_file:
-        raise FileNotFoundError(f"Could not find {oeid1}_registered.h5")
+        raise FileNotFoundError(f"Could not find {oeid1}.h5")
     oeid_mt = next(oied2_input_dir.rglob(f"{oeid2}_motion_transform.csv"), "")
     if not oeid_mt:
         raise FileNotFoundError(f"Could not find {oeid2}_motion_transform.csv")

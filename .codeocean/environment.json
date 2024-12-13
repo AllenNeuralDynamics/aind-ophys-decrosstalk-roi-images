@@ -11,6 +11,10 @@
 				{
 					"name": "python3-opencv",
 					"version": "4.2.0+dfsg-5"
+				},
+				{
+					"name": "vim",
+					"version": "2:8.1.2269-1ubuntu5.29"
 				}
 			],
 			"install_software_properties_common": true
