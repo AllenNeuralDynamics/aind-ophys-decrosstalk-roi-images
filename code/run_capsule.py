@@ -190,13 +190,10 @@ def prepare_cached_paired_plane_movies(
     h5_file: Path
         path to cached paired plane movie
     """
-    print(f"~~~~~~~~~{input_dir}")
-    oied2_input_dir = input_dir.parent / f"{oeid2}"
-    print(f"~~~~~~~~~{oied2_input_dir}")
     h5_file = next(input_dir.rglob(f"{oeid1}.h5"), "")
     if not h5_file:
         raise FileNotFoundError(f"Could not find {oeid1}.h5")
-    oeid_mt = next(oied2_input_dir.rglob(f"{oeid2}_motion_transform.csv"), "")
+    oeid_mt = next(input_dir.rglob(f"{oeid2}_motion_transform.csv"), "")
     if not oeid_mt:
         raise FileNotFoundError(f"Could not find {oeid2}_motion_transform.csv")
     transform_df = ppr.get_s2p_motion_transform(oeid_mt)
@@ -358,10 +355,10 @@ if __name__ == "__main__":
     non_rigid = check_non_rigid_registration(oeid1_input_dir)
     block_size = get_block_size(oeid1_input_dir)
     oeid1_reg_to_oeid2_motion_filepath = prepare_cached_paired_plane_movies(
-        oeid1, oeid2, oeid1_input_dir, non_rigid=non_rigid, block_size=block_size
+        oeid1, oeid2, input_dir, non_rigid=non_rigid, block_size=block_size
     )
     oeid2_reg_to_oeid1_motion_filepath = prepare_cached_paired_plane_movies(
-        oeid2, oeid1, oeid2_input_dir, non_rigid=non_rigid, block_size=block_size
+        oeid2, oeid1, input_dir, non_rigid=non_rigid, block_size=block_size
     )
     processing_json = get_processing_json(oeid1_input_dir)
     ppr.episodic_mean_fov(
