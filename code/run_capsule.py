@@ -236,8 +236,6 @@ def get_block_size(input_dir: Path) -> list:
         block size of image
     """
     processing_fp = next(input_dir.rglob("processing.json"), "")
-    if not processing_fp:
-        
     processing_json = get_processing_json(input_dir)
     try:
         block_size = processing_json["processing_pipeline"]["data_processes"][0][
