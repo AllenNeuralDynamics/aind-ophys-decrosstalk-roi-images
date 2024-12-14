@@ -6,10 +6,7 @@ import h5py
 from suite2p.registration import nonrigid
 import shutil
 from aind_ophys_utils.video_utils import encode_video
-
-# NOTE: currently this module works in the Session level, someone may want to calculat per
-# experiment
-# TODO: implement per experiment level
+import logging
 
 
 def get_s2p_motion_transform(csv_path: Path, non_rigid: bool = True) -> pd.DataFrame:
@@ -186,15 +183,15 @@ def paired_plane_cached_movie(
         path to save transformed h5 file, by default None
     return_rframes : bool, optional
         return registered frames, by default False
-
     Returns
     -------
     Path to temporary h5 file
     """
 
     with h5py.File(h5_file, "r") as f:
-        print(f"~~~~~~~~~H5 File{h5_file}")
+        logging.info(f"Processing {h5_file}")
         data_length = f["data"].shape[0]
+
         start_frames = np.arange(0, data_length, chunk_size)
         end_frames = np.append(start_frames[1:], data_length)
         # assert that frames and shifts are the same length
@@ -209,9 +206,9 @@ def paired_plane_cached_movie(
             blocks = nonrigid.make_blocks(Ly=Ly, Lx=Lx, block_size=block_size)
             ymax1 = np.vstack(reg_df.nonrigid_y.values)
             xmax1 = np.vstack(reg_df.nonrigid_x.values)
-        print(data_length)
-        print(len(y_shifts))
-        print(len(x_shifts))
+        logging.info("Data length: %d", data_length)
+        logging.info("Number of shifts: %d", len(y_shifts))
+        logging.info("Number of shifts: %d", len(x_shifts))
         assert data_length == len(y_shifts) == len(x_shifts)
         for start_frame, end_frame in zip(start_frames, end_frames):
             r_frames = np.zeros_like(f["data"][start_frame:end_frame], dtype=np.int16)
@@ -234,12 +231,12 @@ def paired_plane_cached_movie(
                     xmax1=xmax1_group,
                     bilinear=True,
                 )
-                # uint16 is preferrable, but suite2p default seems like int16, and other files are
-                # in int16
-                # Suite2p codes also need to be changed to work with uint16 (e.g., using
-                # nonrigid_uint16 branch)
-                # njit pre-defined data type
-                # TODO: change all processing into uint16 in the future
+            # uint16 is preferrable, but suite2p default seems like int16, and other files are
+            # in int16
+            # Suite2p codes also need to be changed to work with uint16 (e.g., using
+            # nonrigid_uint16 branch)
+            # njit pre-defined data type
+            # TODO: change all processing into uint16 in the future
 
             # save r_frames
             temp_path = tmp_dir / f'{h5_file.name.split(".")[0]}_registered_to_pair.h5'
