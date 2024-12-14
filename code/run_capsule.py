@@ -235,6 +235,9 @@ def get_block_size(input_dir: Path) -> list:
     block_size: list
         block size of image
     """
+    processing_fp = next(input_dir.rglob("processing.json"), "")
+    if not processing_fp:
+        
     processing_json = get_processing_json(input_dir)
     try:
         block_size = processing_json["processing_pipeline"]["data_processes"][0][
@@ -334,6 +337,30 @@ def make_output_dirs(oeid: str, output_dir: Path) -> Path:
     results_dir.mkdir(exist_ok=True)
     return results_dir
 
+def get_frame_rate(session_fp: Path) -> float:
+    """ Return frame rate from session.json
+
+    Parameters
+    ----------
+    session_fp: Path
+        Path to session file
+
+    Returns
+    -------
+    frame_rate_hz: float    
+        Frame rate of time series
+    """
+    with open(session_fp, "r") as f:
+        session_data = json.load(f)
+    frame_rate_hz = None
+    for i in session.get("data_streams", ""):
+        frame_rate_hz = [j["frame_rate"] for j in i["ophys_fovs"]]
+        frame_rate_hz = frame_rate_hz[0]
+        if frame_rate_hz:
+            break
+    if isinstance(frame_rate_hz, str):
+        frame_rate_hz = float(frame_rate_hz)
+    return frame_rate_hz
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()

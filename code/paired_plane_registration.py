@@ -186,7 +186,8 @@ def paired_plane_cached_movie(
         path to save transformed h5 file, by default None
     return_rframes : bool, optional
         return registered frames, by default False
-
+    debug : bool, optional
+        read h5 in debug mode
     Returns
     -------
     Path to temporary h5 file
