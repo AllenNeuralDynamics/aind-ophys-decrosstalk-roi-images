@@ -93,10 +93,12 @@ def decrosstalk_roi_movie(
         Path("../scratch").rglob(f"{paired_oeid}_registered_to_pair.h5")
     )
     paired_reg_emf_fn = next(
-        (output_dir.parent.parent / paired_oeid / "decrosstalk").glob(
+        (output_dir.parent.parent.rglob(
             f"{paired_oeid}_registered_to_pair_episodic_mean_fov.h5"
         )
     )
+    )
+
 
     ## Just to get alpha and beta for the experiment using the episodic mean fov paired movie
     (
@@ -181,18 +183,17 @@ def debug_movie(temp_path: Path, h5_file: Path) -> Path:
     h5_file: Path
         path to h5 file
     """
-    session_fp = h5_file.parent / "session.json"
-    if not session_fp.exists():
+    session_fp = next(h5_file.parent.parent.rglob("session.json"), "")
+    if not session_fp:
         raise FileNotFoundError(f"Could not find {session_fp}")
-    session_data = read_json(session_fp)
-    frame_rate_hz = get_frame_rate(session_data)
-    with h5.File(temp_path / h5_file.basename, "r") as f:
+    frame_rate_hz = get_frame_rate(session_fp)
+    with h5.File(h5_file, "r") as f:
         frames_6min = int(360 * float(frame_rate_hz))
         data = f["data"][:frames_6min]
-    with tempfile.NamedTemporaryFile(suffix=".h5", delete=False) as temp:
-        with h5.File(temp.name, "w") as f:
-            f.create_dataset("data", data=data)
-    return Path(temp.name)
+    h5_file = Path("../scratch") / h5_file.name
+    with h5.File(h5_file, "w") as f:
+        f.create_dataset("data", data=data)
+    return h5_file
 
 def prepare_cached_paired_plane_movies(
     oeid1: str, oeid2: str, input_dir: Path, non_rigid: bool = True, block_size=[128, 128], debug: bool = False
@@ -229,8 +230,6 @@ def prepare_cached_paired_plane_movies(
     return ppr.paired_plane_cached_movie(
         h5_file, transform_df, non_rigid=non_rigid, block_size=block_size
     )
-
-
 def read_json(json_fp: Path) -> dict:
     """
     Get processing json from input directory
@@ -395,12 +394,12 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--debug", action="store_true")
     args = parser.parse_args()
-    if args.debug:
-        num_frames = 300
-    else:
-        num_frames = 1000
     input_dir = Path("../data/").resolve()
     output_dir = Path("../results/").resolve()
+    debug = args.debug
+    num_frames = 1000
+    if debug:
+        num_frames = 300
     experiment_dirs = input_dir.glob("pair*/*")
     oeid1_input_dir = next(experiment_dirs)
     oeid2_input_dir = next(experiment_dirs)
@@ -410,11 +409,12 @@ if __name__ == "__main__":
     oeid2_output_dir = make_output_dirs(oeid2, output_dir)
     non_rigid = check_non_rigid_registration(oeid1_input_dir)
     block_size = get_block_size(oeid1_input_dir)
+
     oeid1_reg_to_oeid2_motion_filepath = prepare_cached_paired_plane_movies(
-        oeid1, oeid2, input_dir, non_rigid=non_rigid, block_size=block_size
+        oeid1, oeid2, input_dir, non_rigid=non_rigid, block_size=block_size, debug=debug
     )
     oeid2_reg_to_oeid1_motion_filepath = prepare_cached_paired_plane_movies(
-        oeid2, oeid1, input_dir, non_rigid=non_rigid, block_size=block_size
+        oeid2, oeid1, input_dir, non_rigid=non_rigid, block_size=block_size, debug=debug
     )
     ppr.episodic_mean_fov(
         oeid1_reg_to_oeid2_motion_filepath, oeid1_output_dir, num_frames=num_frames
