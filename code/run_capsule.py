@@ -183,7 +183,8 @@ def debug_movie(temp_path: Path, h5_file: Path) -> Path:
     h5_file: Path
         path to h5 file
     """
-    session_fp = next(h5_file.parent.parent.rglob("session.json"), "")
+    print(f"~~~~~~~~~~~~~~~~~~~~~~{h5_file}")
+    session_fp = next(h5_file.parent.rglob("session.json"), "")
     if not session_fp:
         raise FileNotFoundError(f"Could not find {session_fp}")
     frame_rate_hz = get_frame_rate(session_fp)
