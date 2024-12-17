@@ -191,7 +191,7 @@ def paired_plane_cached_movie(
         whether the motion transform is non-rigid, by default True
     block_size : list, optional
         block size for non-rigid registration, by default [128, 128]
-    
+
     Returns
     -------
     Path to temporary h5 file
@@ -370,7 +370,7 @@ def fig_paired_planes_registered_projections(projections_dict: dict):
 def histogram_shifts(expt1_shifts, expt2_shifts):
     """
     Plot histograms of shifts for each plane
-    
+
     Parameters
     ----------
     expt1_shifts : pd.DataFrame
@@ -412,7 +412,7 @@ def episodic_mean_fov(
         Number of frames to average to calculate the mean FOV image
     save_webm: bool
         Save webm or not
-        
+
     Returns
     -------
     Path to the mean FOV image h5 file
