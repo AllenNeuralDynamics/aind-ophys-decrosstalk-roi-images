@@ -13,6 +13,7 @@ from datetime import datetime as dt
 import argparse
 import os
 
+
 def write_output_metadata(
     metadata: dict,
     input_fp: Union[str, Path],
@@ -55,7 +56,9 @@ def write_output_metadata(
             ],
         )
     )
-    prev_processing.processing_pipeline.data_processes.append(processing.processing_pipeline.data_processes[0])
+    prev_processing.processing_pipeline.data_processes.append(
+        processing.processing_pipeline.data_processes[0]
+    )
     prev_processing.write_standard_file(output_directory=Path(output_fp).parent)
 
 
@@ -90,12 +93,12 @@ def decrosstalk_roi_movie(
         Path("../scratch").rglob(f"{paired_oeid}_registered_to_pair.h5")
     )
     paired_reg_emf_fn = next(
-        (output_dir.parent.parent.rglob(
-            f"{paired_oeid}_registered_to_pair_episodic_mean_fov.h5"
+        (
+            output_dir.parent.parent.rglob(
+                f"{paired_oeid}_registered_to_pair_episodic_mean_fov.h5"
+            )
         )
     )
-    )
-
 
     ## Just to get alpha and beta for the experiment using the episodic mean fov paired movie
     (
@@ -166,16 +169,17 @@ def decrosstalk_roi_movie(
     )
     return decrosstalk_fn
 
-def debug_movie(h5_file: Path,temp_path: Path = Path("../scratch")) -> Path:
+
+def debug_movie(h5_file: Path, temp_path: Path = Path("../scratch")) -> Path:
     """debug movie for development
-    
+
     Parameters
     ----------
     h5_file: Path
         path to h5 file
     temp_path: Path, optional
         path to temp directory, default is "../scratch"
-    
+
     Returns
     -------
     h5_file: Path
@@ -194,8 +198,14 @@ def debug_movie(h5_file: Path,temp_path: Path = Path("../scratch")) -> Path:
         f.create_dataset("data", data=data)
     return h5_file
 
+
 def prepare_cached_paired_plane_movies(
-    oeid1: str, oeid2: str, input_dir: Path, non_rigid: bool = True, block_size: list=[128, 128], debug: bool = False
+    oeid1: str,
+    oeid2: str,
+    input_dir: Path,
+    non_rigid: bool = True,
+    block_size: list = [128, 128],
+    debug: bool = False,
 ) -> Path:
     """
     Prepare cached paired plane movies
@@ -231,6 +241,8 @@ def prepare_cached_paired_plane_movies(
     return ppr.paired_plane_cached_movie(
         h5_file, transform_df, non_rigid=non_rigid, block_size=block_size
     )
+
+
 def read_json(json_fp: Path) -> dict:
     """
     Get processing json from input directory
@@ -369,8 +381,9 @@ def make_output_dirs(oeid: str, output_dir: Path) -> Path:
     results_dir.mkdir(exist_ok=True)
     return results_dir
 
+
 def get_frame_rate(session_fp: Path) -> float:
-    """ Return frame rate from session.json
+    """Return frame rate from session.json
 
     Parameters
     ----------
@@ -379,7 +392,7 @@ def get_frame_rate(session_fp: Path) -> float:
 
     Returns
     -------
-    frame_rate_hz: float    
+    frame_rate_hz: float
         Frame rate of time series
     """
     session_data = read_json(session_fp)
@@ -392,6 +405,7 @@ def get_frame_rate(session_fp: Path) -> float:
     if isinstance(frame_rate_hz, str):
         frame_rate_hz = float(frame_rate_hz)
     return frame_rate_hz
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
