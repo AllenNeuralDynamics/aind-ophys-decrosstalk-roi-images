@@ -5,7 +5,6 @@ import logging
 import numpy as np
 import paired_plane_registration as ppr
 import decrosstalk_roi_image as dri
-import shutil
 import json
 from aind_data_schema.core.processing import Processing
 from aind_data_schema.core.processing import DataProcess, ProcessName, PipelineProcess
@@ -13,7 +12,6 @@ from typing import Union
 from datetime import datetime as dt
 import argparse
 import os
-import tempfile
 
 def write_output_metadata(
     metadata: dict,
@@ -88,7 +86,6 @@ def decrosstalk_roi_movie(
     logging.info(f"Input directory, {input_dir}")
     logging.info(f"Output directory, {output_dir}")
     logging.info(f"Ophys experiment ID pairs, {oeid}, {paired_oeid}")
-    oeid_mt = input_dir / "motion_correction" / f"{oeid}_motion_transform.csv"
     paired_oeid_reg_to_oeid_full_fn = next(
         Path("../scratch").rglob(f"{paired_oeid}_registered_to_pair.h5")
     )
@@ -169,12 +166,13 @@ def decrosstalk_roi_movie(
     )
     return decrosstalk_fn
 
-def debug_movie(temp_path: Path, h5_file: Path) -> Path:
+def debug_movie(temp_path: Path = Path("../scratch"), h5_file: Path) -> Path:
     """debug movie for development
     
     Parameters
     ----------
     temp_path: Path
+        path to temp directory
     h5_file: Path
         path to h5 file
     
@@ -183,7 +181,7 @@ def debug_movie(temp_path: Path, h5_file: Path) -> Path:
     h5_file: Path
         path to h5 file
     """
-    print(f"~~~~~~~~~~~~~~~~~~~~~~{h5_file}")
+    logging.info("Running in debug %s", h5_file)
     session_fp = next(h5_file.parent.rglob("session.json"), "")
     if not session_fp:
         raise FileNotFoundError(f"Could not find {session_fp}")
@@ -191,13 +189,13 @@ def debug_movie(temp_path: Path, h5_file: Path) -> Path:
     with h5.File(h5_file, "r") as f:
         frames_6min = int(360 * float(frame_rate_hz))
         data = f["data"][:frames_6min]
-    h5_file = Path("../scratch") / h5_file.name
+    h5_file = temp_path / h5_file.name
     with h5.File(h5_file, "w") as f:
         f.create_dataset("data", data=data)
     return h5_file
 
 def prepare_cached_paired_plane_movies(
-    oeid1: str, oeid2: str, input_dir: Path, non_rigid: bool = True, block_size=[128, 128], debug: bool = False
+    oeid1: str, oeid2: str, input_dir: Path, non_rigid: bool = True, block_size: list=[128, 128], debug: bool = False
 ) -> Path:
     """
     Prepare cached paired plane movies
@@ -212,6 +210,8 @@ def prepare_cached_paired_plane_movies(
         path to input data
     non_rigid: bool
         True if non-rigid registration was run, False otherwise
+    block_size: list
+        block size of image, default is [128, 128]
     debug: bool, optional
         True if debugging, False otherwise
     Returns
@@ -254,8 +254,8 @@ def get_block_size(input_dir: Path) -> list:
 
     Parameters
     ----------
-    processing: dict
-        processing json
+    input_dir: Path
+        path to input data
 
     Returns
     -------
@@ -327,6 +327,8 @@ def run_decrosstalk(
         ophys experiment id of paired experiment
     start_time: dt
         start time of decrosstalk processing
+    num_frames: int, optional
+        number of frames to process, default is 1000
     """
     logging.info(f"Running paired plane registration...")
     # create cached registered to pair movie for each pair
@@ -351,7 +353,7 @@ def make_output_dirs(oeid: str, output_dir: Path) -> Path:
 
     Parameters
     ----------
-    oeid: Path
+    oeid: str
         ophys experiment id
     output_dir: Path
         path to output data
