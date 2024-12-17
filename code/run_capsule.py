@@ -5,7 +5,6 @@ import logging
 import numpy as np
 import paired_plane_registration as ppr
 import decrosstalk_roi_image as dri
-import shutil
 import json
 from aind_data_schema.core.processing import Processing
 from aind_data_schema.core.processing import DataProcess, ProcessName, PipelineProcess
@@ -13,6 +12,7 @@ from typing import Union
 from datetime import datetime as dt
 import argparse
 import os
+
 
 def write_output_metadata(
     metadata: dict,
@@ -35,8 +35,7 @@ def write_output_metadata(
         url to code repository
     """
     original_proc_file = input_fp.parent
-    with open(original_proc_file / "processing.json", "r") as f:
-        proc_data = json.load(f)
+    proc_data = read_json(original_proc_file / "processing.json")
     prev_processing = Processing(**proc_data)
     processing = Processing(
         processing_pipeline=PipelineProcess(
@@ -57,7 +56,9 @@ def write_output_metadata(
             ],
         )
     )
-    prev_processing.processing_pipeline.data_processes.append(processing.processing_pipeline.data_processes[0])
+    prev_processing.processing_pipeline.data_processes.append(
+        processing.processing_pipeline.data_processes[0]
+    )
     prev_processing.write_standard_file(output_directory=Path(output_fp).parent)
 
 
@@ -88,13 +89,14 @@ def decrosstalk_roi_movie(
     logging.info(f"Input directory, {input_dir}")
     logging.info(f"Output directory, {output_dir}")
     logging.info(f"Ophys experiment ID pairs, {oeid}, {paired_oeid}")
-    oeid_mt = input_dir / "motion_correction" / f"{oeid}_motion_transform.csv"
     paired_oeid_reg_to_oeid_full_fn = next(
-        Path("../scratch").glob(f"{paired_oeid}_registered_to_pair.h5")
+        Path("../scratch").rglob(f"{paired_oeid}_registered_to_pair.h5")
     )
     paired_reg_emf_fn = next(
-        (output_dir.parent.parent / paired_oeid / "decrosstalk").glob(
-            f"{paired_oeid}_registered_to_pair_episodic_mean_fov.h5"
+        (
+            output_dir.parent.parent.rglob(
+                f"{paired_oeid}_registered_to_pair_episodic_mean_fov.h5"
+            )
         )
     )
 
@@ -168,8 +170,42 @@ def decrosstalk_roi_movie(
     return decrosstalk_fn
 
 
+def debug_movie(h5_file: Path, temp_path: Path = Path("../scratch")) -> Path:
+    """debug movie for development
+
+    Parameters
+    ----------
+    h5_file: Path
+        path to h5 file
+    temp_path: Path, optional
+        path to temp directory, default is "../scratch"
+
+    Returns
+    -------
+    h5_file: Path
+        path to h5 file
+    """
+    logging.info("Running in debug %s", h5_file)
+    session_fp = next(h5_file.parent.rglob("session.json"), "")
+    if not session_fp:
+        raise FileNotFoundError(f"Could not find {session_fp}")
+    frame_rate_hz = get_frame_rate(session_fp)
+    with h5.File(h5_file, "r") as f:
+        frames_6min = int(360 * float(frame_rate_hz))
+        data = f["data"][:frames_6min]
+    h5_file = temp_path / h5_file.name
+    with h5.File(h5_file, "w") as f:
+        f.create_dataset("data", data=data)
+    return h5_file
+
+
 def prepare_cached_paired_plane_movies(
-    oeid1: str, oeid2: str, input_dir: Path, non_rigid: bool = True, block_size=[128, 128]
+    oeid1: str,
+    oeid2: str,
+    input_dir: Path,
+    non_rigid: bool = True,
+    block_size: list = [128, 128],
+    debug: bool = False,
 ) -> Path:
     """
     Prepare cached paired plane movies
@@ -184,28 +220,49 @@ def prepare_cached_paired_plane_movies(
         path to input data
     non_rigid: bool
         True if non-rigid registration was run, False otherwise
-
+    block_size: list
+        block size of image, default is [128, 128]
+    debug: bool, optional
+        True if debugging, False otherwise
     Returns
     -------
     h5_file: Path
         path to cached paired plane movie
     """
-    h5_file = input_dir / "motion_correction" / f"{oeid1}.h5"
-    oeid_mt = (
-        input_dir.parent / oeid2 / "motion_correction" / f"{oeid2}_motion_transform.csv"
-    )
-    if not h5_file.is_file():
-        h5_file = input_dir.parent.parent / f"{oeid1}_registered.h5"
-        print(f"~~~~~~~~~~~~~~~~~~~~~~~{h5_file}")
+    h5_file = next(input_dir.rglob(f"{oeid1}.h5"), "")
+    if not h5_file:
+        raise FileNotFoundError(f"Could not find {oeid1}.h5")
+    if debug:
+        h5_file = debug_movie(h5_file)
+    oeid_mt = next(input_dir.rglob(f"{oeid2}_motion_transform.csv"), "")
+    if not oeid_mt:
+        raise FileNotFoundError(f"Could not find {oeid2}_motion_transform.csv")
     transform_df = ppr.get_s2p_motion_transform(oeid_mt)
     return ppr.paired_plane_cached_movie(
         h5_file, transform_df, non_rigid=non_rigid, block_size=block_size
     )
 
 
-def get_processing_json(input_dir: Path) -> dict:
+def read_json(json_fp: Path) -> dict:
     """
     Get processing json from input directory
+
+    Parameters
+    ----------
+    json_fp: Path
+        path to json
+
+    Returns
+    -------
+    data: dict
+        processing json
+    """
+    with open(json_fp, "r") as f:
+        return json.load(f)
+
+
+def get_block_size(input_dir: Path) -> list:
+    """get image dimensions from processing json
 
     Parameters
     ----------
@@ -214,29 +271,13 @@ def get_processing_json(input_dir: Path) -> dict:
 
     Returns
     -------
-    pj: dict
-        processing json
-    """
-    processing_json = next(input_dir.glob("*/processing.json"))
-    with open(processing_json, "r") as f:
-        pj = json.load(f)
-    return pj
-
-
-def get_block_size(input_dir: Path) -> list:
-    """get image dimensions from processing json
-
-    Parameters
-    ----------
-    processing: dict
-        processing json
-
-    Returns
-    -------
     block_size: list
         block size of image
     """
-    processing_json = get_processing_json(input_dir)
+    processing_fp = next(input_dir.rglob("processing.json"), "")
+    if not processing_fp:
+        raise FileNotFoundError(f"Could not find processing.json in {input_dir}")
+    processing_json = read_json(processing_fp)
     try:
         block_size = processing_json["processing_pipeline"]["data_processes"][0][
             "parameters"
@@ -261,7 +302,10 @@ def check_non_rigid_registration(input_dir: Path) -> bool:
     bool
         True if non-rigid registration was run, False otherwise
     """
-    processing_json = get_processing_json(input_dir)
+    processing_fp = next(input_dir.rglob("processing.json"), "")
+    if not processing_fp:
+        raise FileNotFoundError(f"Could not find processing.json in {input_dir}")
+    processing_json = read_json(processing_fp)
     try:
         nonrigid = processing_json["processing_pipeline"]["data_processes"][0][
             "parameters"
@@ -295,6 +339,8 @@ def run_decrosstalk(
         ophys experiment id of paired experiment
     start_time: dt
         start time of decrosstalk processing
+    num_frames: int, optional
+        number of frames to process, default is 1000
     """
     logging.info(f"Running paired plane registration...")
     # create cached registered to pair movie for each pair
@@ -319,7 +365,7 @@ def make_output_dirs(oeid: str, output_dir: Path) -> Path:
 
     Parameters
     ----------
-    oeid: Path
+    oeid: str
         ophys experiment id
     output_dir: Path
         path to output data
@@ -336,16 +382,41 @@ def make_output_dirs(oeid: str, output_dir: Path) -> Path:
     return results_dir
 
 
+def get_frame_rate(session_fp: Path) -> float:
+    """Return frame rate from session.json
+
+    Parameters
+    ----------
+    session_fp: Path
+        Path to session file
+
+    Returns
+    -------
+    frame_rate_hz: float
+        Frame rate of time series
+    """
+    session_data = read_json(session_fp)
+    frame_rate_hz = None
+    for i in session_data.get("data_streams", ""):
+        frame_rate_hz = [j["frame_rate"] for j in i["ophys_fovs"]]
+        frame_rate_hz = frame_rate_hz[0]
+        if frame_rate_hz:
+            break
+    if isinstance(frame_rate_hz, str):
+        frame_rate_hz = float(frame_rate_hz)
+    return frame_rate_hz
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--debug", action="store_true")
     args = parser.parse_args()
-    if args.debug:
-        num_frames = 300
-    else:
-        num_frames = 1000
     input_dir = Path("../data/").resolve()
     output_dir = Path("../results/").resolve()
+    debug = args.debug
+    num_frames = 1000
+    if debug:
+        num_frames = 300
     experiment_dirs = input_dir.glob("pair*/*")
     oeid1_input_dir = next(experiment_dirs)
     oeid2_input_dir = next(experiment_dirs)
@@ -355,13 +426,13 @@ if __name__ == "__main__":
     oeid2_output_dir = make_output_dirs(oeid2, output_dir)
     non_rigid = check_non_rigid_registration(oeid1_input_dir)
     block_size = get_block_size(oeid1_input_dir)
+
     oeid1_reg_to_oeid2_motion_filepath = prepare_cached_paired_plane_movies(
-        oeid1, oeid2, oeid1_input_dir, non_rigid=non_rigid, block_size=block_size
+        oeid1, oeid2, input_dir, non_rigid=non_rigid, block_size=block_size, debug=debug
     )
     oeid2_reg_to_oeid1_motion_filepath = prepare_cached_paired_plane_movies(
-        oeid2, oeid1, oeid2_input_dir, non_rigid=non_rigid, block_size=block_size
+        oeid2, oeid1, input_dir, non_rigid=non_rigid, block_size=block_size, debug=debug
     )
-    processing_json = get_processing_json(oeid1_input_dir)
     ppr.episodic_mean_fov(
         oeid1_reg_to_oeid2_motion_filepath, oeid1_output_dir, num_frames=num_frames
     )

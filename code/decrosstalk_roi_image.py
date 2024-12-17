@@ -1,13 +1,17 @@
 from pathlib import Path
 import numpy as np
 import h5py
+import matplotlib
 import matplotlib.pyplot as plt
 from cellpose import models as cp_models
 import skimage
 import pandas as pd
+from typing import Tuple
 
 
-def get_motion_correction_crop_xy_range_from_both_planes(oeid, paired_id, input_dir):
+def get_motion_correction_crop_xy_range_from_both_planes(
+    oeid: int, paired_id: int, input_dir: Path
+) -> Tuple[list, list]:
     """Get x-y ranges to crop motion-correction frame rolling from both planes
 
     TODO: when nonrigid registration parameter setting is done,
@@ -17,6 +21,10 @@ def get_motion_correction_crop_xy_range_from_both_planes(oeid, paired_id, input_
     ----------
     oeid : int
         ophys experiment ID
+    paired_id : int
+        ophys experiment ID of the paired plane
+    input_dir : Path
+        path to input directory
 
     Returns
     -------
@@ -34,7 +42,7 @@ def get_motion_correction_crop_xy_range_from_both_planes(oeid, paired_id, input_
     return xrange, yrange
 
 
-def get_motion_correction_crop_xy_range(oeid, input_dir):
+def get_motion_correction_crop_xy_range(oeid: int, input_dir: Path) -> Tuple[list, list]:
     """Get x-y ranges to crop motion-correction frame rolling
 
     TODO: move to utils
@@ -67,14 +75,14 @@ def get_motion_correction_crop_xy_range(oeid, input_dir):
 
 
 def decrosstalk_roi_image_from_episodic_mean_fov(
-    oeid,
-    paired_reg_fn,
-    input_dir,
-    pixel_size=0.78,
-    grid_interval=0.01,
-    max_grid_val=0.3,
-    return_recon=False,
-):
+    oeid: int,
+    paired_reg_fn: Path,
+    input_dir: Path,
+    pixel_size: float = 0.78,
+    grid_interval: float = 0.01,
+    max_grid_val: float = 0.3,
+    return_recon: float = False,
+) -> Tuple[np.array, list, list, list]:
     """Get alpha and beta values for an experiment based on
     the mutual information of the ROI images from motion corrected episodic mean FOV images
 
@@ -82,7 +90,7 @@ def decrosstalk_roi_image_from_episodic_mean_fov(
     -----------
     oeid : int
         oeid of the signal plane
-    paired_reg_fn : str, Path
+    paired_reg_fn : Path
         path to paired registration file
         TODO: Once paired plane registration pipeline is finalized,
         this parameter can be removed or replaced with paired_oeid
@@ -159,15 +167,15 @@ def decrosstalk_roi_image_from_episodic_mean_fov(
 
 
 def decrosstalk_roi_image_single_pair_from_episodic_mean_fov(
-    oeid,
-    paired_reg_emf_fn,
-    input_dir,
-    start_frame,
-    pix_size,
-    motion_buffer=5,
-    grid_interval=0.01,
-    max_grid_val=0.3,
-):
+    oeid: int,
+    paired_reg_emf_fn: str,
+    input_dir: Path,
+    start_frame: int,
+    pix_size: float,
+    motion_buffer: int = 5,
+    grid_interval: float = 0.01,
+    max_grid_val: float = 0.3,
+) -> Tuple[float, float, list]:
     """Get alpha and beta values for a single pair of mean images
     based on the mean normalized mutual information of the ROI images
 
@@ -270,14 +278,14 @@ def decrosstalk_roi_image_single_pair_from_episodic_mean_fov(
 
 
 def get_signal_paired_top_masks(
-    signal_mean,
-    paired_mean,
-    dendrite_diameter_um=10,
-    pix_size=0.78,
-    nrshiftmax=5,
-    overlap_threshold=0.7,
-    num_top_rois=15,
-):
+    signal_mean: np.array,
+    paired_mean: np.array,
+    dendrite_diameter_um: int = 10,
+    pix_size: float = 0.78,
+    nrshiftmax: int = 5,
+    overlap_threshold: int = 0.7,
+    num_top_rois: int = 15,
+) -> Tuple[np.array, np.array]:
     """Get top masks of 2 paired mean images
     Apply CellPose to get the masks, then filter dendrites and border ROIs
     Then get the top n intensity masks from both planes
@@ -369,13 +377,15 @@ def get_signal_paired_top_masks(
     return signal_top_masks, paired_top_masks
 
 
-def filter_dendrite(masks, dendrite_diameter_pix=10 / 0.78):
+def filter_dendrite(
+    masks: np.array, dendrite_diameter_pix: float = (10 / 0.78)
+) -> np.array:
     """Filter dendrites from masks based on area threshold
 
     Input Parameters
     ----------------
     masks: 2d array, each ROI has a unique integer value
-    dendrite_diameter: int, diameter of dendrite in pix
+    dendrite_diameter_pix: float, diameter of dendrite in pix
 
     Returns
     -------
@@ -394,7 +404,7 @@ def filter_dendrite(masks, dendrite_diameter_pix=10 / 0.78):
     return filtered_mask
 
 
-def filter_border_roi(masks, buffer_pix=5):
+def filter_border_roi(masks: np.array, buffer_pix: int = 5) -> np.array:
     """Filter ROIs that are too close to the border of the FOV
 
     Input Parameters
@@ -422,7 +432,9 @@ def filter_border_roi(masks, buffer_pix=5):
     return filtered_mask
 
 
-def get_top_intensity_mask(img, mask, num_top_rois=15):
+def get_top_intensity_mask(
+    img: np.array, mask: np.array, num_top_rois: int = 15
+) -> np.array:
     """Get top intensity mask
 
     Parameters:
@@ -456,7 +468,7 @@ def get_top_intensity_mask(img, mask, num_top_rois=15):
         return top_mask
 
 
-def get_ranks_roi_inds(img, mask):
+def get_ranks_roi_inds(img: np.array, mask: np.array) -> Tuple[np.array, np.array]:
     """Get ranks and ROI indices based on the intensity of img
     For each ROI ID in the mask
 
@@ -481,7 +493,7 @@ def get_ranks_roi_inds(img, mask):
     return ranks, roi_inds
 
 
-def reorder_mask(mask):
+def reorder_mask(mask: np.array) -> np.array:
     """Reorder mask IDs to have 1 to N IDs
     N = number of ROIs
     Need to run this after filtering dendrites and border ROIs (for convenience)
@@ -503,7 +515,7 @@ def reorder_mask(mask):
     return mask_reordered
 
 
-def get_bounding_box(masks, area_extension_factor=2):
+def get_bounding_box(masks: np.array, area_extension_factor: int = 2) -> np.array:
     """Get bounding box of ROI masks
 
     Parameters:
@@ -549,7 +561,9 @@ def get_bounding_box(masks, area_extension_factor=2):
     return bb_masks
 
 
-def apply_mixing_matrix(alpha, beta, signal_mean, paired_mean):
+def apply_mixing_matrix(
+    alpha: float, beta: float, signal_mean: np.array, paired_mean: np.array
+) -> Tuple[np.array, np.array]:
     """Apply mixing matrix to the mean images to get reconstructed images
 
     Parameters:
@@ -579,7 +593,13 @@ def apply_mixing_matrix(alpha, beta, signal_mean, paired_mean):
     return recon_signal, recon_paired
 
 
-def draw_masks_on_image(img, masks, ax=None, color="r", linewidth=1):
+def draw_masks_on_image(
+    img: np.array,
+    masks: np.array,
+    ax: matplotlib.axes.Axes = None,
+    color: str = "r",
+    linewidth: int = 1,
+) -> Tuple[matplotlib.figure.Figure, matplotlib.axes.Axes]:
     """Draw masks on image
 
     Parameters:
