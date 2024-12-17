@@ -21,7 +21,7 @@ def get_s2p_motion_transform(csv_path: Path, non_rigid: bool = True) -> pd.DataF
     csv_path : Path
         path to suite2p rigid or non-rigid motion transform
     non_rigid : bool, optional
-        whether to read non-rigid motion transform, by default True
+        whether the motion transform is non-rigid, by default True
 
     Returns
     -------
@@ -73,6 +73,8 @@ def generate_mean_episodic_fov_pairings_registered_frames(
         Maximum number of epochs to calculate the mean FOV image for
     num_frames : int
         Number of frames to average to calculate the mean FOV image
+    non_rigid: bool
+        whether the motion transform is non-rigid, by default True
 
     Returns
     -------
@@ -185,12 +187,12 @@ def paired_plane_cached_movie(
         registration DataFrame (from the csv file) for the pair associated with the non-motion
         corrected movie
     tmp_dir : Path, optional
-        temporary directory to save the registered movie, by default Path("../scratch/")
-    chunk_size: int, optional
+        temporary directory to store the registered movie, by default Path("../scratch/")
+    chunk_size : int, optional
         number of frames to process at a time, by default 5000
-    non_rigid: bool, optional
-        whether to use non-rigid registration, by default True
-    block_size: list, optional
+    non_rigid : bool, optional
+        whether the motion transform is non-rigid, by default True
+    block_size : list, optional
         block size for non-rigid registration, by default [128, 128]
 
     Returns
@@ -303,17 +305,18 @@ def shift_frame(frame: np.ndarray, dy: int, dx: int) -> np.ndarray:
 
 
 def fig_paired_planes_registered_projections(projections_dict: dict):
-    """
-    Plot all registered projections for paired planes
-    
+    """Plot registered projections of paired planes
+
     Parameters
     ----------
     projections_dict : dict
-        dictionary containing all registered projections for paired planes
-        
-    Returns
-    -------
-    None
+        dictionary containing the following keys:
+        - plane1_raw
+        - plane1_original_registered
+        - plane1_paired_registered
+        - plane2_raw
+        - plane2_original_registered
+        - plane2_paired_registered
     """
     # get 99 percentile of all images to set vmax
     images = [v for k, v in projections_dict.items()]
@@ -367,17 +370,15 @@ def fig_paired_planes_registered_projections(projections_dict: dict):
 
 
 def histogram_shifts(expt1_shifts, expt2_shifts):
-    """Plot histograms of shifts for each plane
+    """
+    Plot histograms of shifts for each plane
+
     Parameters
     ----------
     expt1_shifts : pd.DataFrame
         DataFrame containing the shifts for plane 1
     expt2_shifts : pd.DataFrame
         DataFrame containing the shifts for plane 2
-    
-    Returns
-    -------
-    None
     """
     e1y, e1x = expt1_shifts.y, expt1_shifts.x
     e2y, e2x = expt2_shifts.y, expt2_shifts.x
@@ -413,6 +414,7 @@ def episodic_mean_fov(
         Number of frames to average to calculate the mean FOV image
     save_webm: bool
         Save webm or not
+
     Returns
     -------
     Path to the mean FOV image h5 file
