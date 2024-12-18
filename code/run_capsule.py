@@ -11,6 +11,7 @@ from typing import Union
 from datetime import datetime as dt
 import argparse
 import os
+from aind_log_utils.log import setup_logging
 
 
 def write_data_process(
@@ -402,6 +403,19 @@ if __name__ == "__main__":
     num_frames = 1000
     if debug:
         num_frames = 300
+    subject_fp = next(input_dir.rglob("subject.json"), "")
+    if not subject_fp:
+        raise FileNotFoundError(f"Could not find {subject_fp}")
+    subject_data = read_json(subject_fp)
+    data_description_fp = next(input_dir.rglob("data_description.json"), "")
+    if not data_description_fp:
+        raise FileNotFoundError(f"Could not find {data_description_fp}")
+    data_description = read_json(data_description_fp)
+    subject_id = subject_data["subject_id"]
+    name = data_description["name"]
+    setup_logging(
+        "aind-ophys-ophys-decrosstalk-roi-images", mouse_id=subject_id, session=name
+    )
     experiment_dirs = input_dir.glob("pair*/*")
     oeid1_input_dir = next(experiment_dirs)
     oeid2_input_dir = next(experiment_dirs)
