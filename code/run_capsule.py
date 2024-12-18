@@ -149,7 +149,6 @@ def decrosstalk_roi_movie(
         metadata,
         input_dir / "motion_correction" / f"{oeid}_registered.h5",
         decrosstalk_fn,
-        "https://github.com/AllenNeuralDynamics/aind-ophys-decrosstalk-roi-images/tree/development",
         start_time,
         dt.now(),
     )
