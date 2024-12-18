@@ -145,7 +145,7 @@ def decrosstalk_roi_movie(
                 )
                 f["data"][start_frame:end_frame] = recon_signal_data
         chunk_no += 1
-    write_output_metadata(
+    write_data_process(
         metadata,
         input_dir / "motion_correction" / f"{oeid}_registered.h5",
         decrosstalk_fn,
