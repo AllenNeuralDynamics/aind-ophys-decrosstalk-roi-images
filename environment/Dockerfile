@@ -18,7 +18,6 @@ RUN apt-get update \
     && rm -rf /var/lib/apt/lists/*
 
 RUN pip install -U --no-cache-dir \
-    aind-data-schema==0.22.0 \
     aind-ophys-utils==0.0.7 \
     cellpose==2.2.3 \
     h5py==3.10.0 \
@@ -29,4 +28,6 @@ RUN pip install -U --no-cache-dir \
     pydantic==2.8.2 \
     scikit-image==0.21.0 \
     scipy==1.10.1 \
-    suite2p==0.14.3
+    suite2p==0.14.3 \
+    aind-data-schema==1.1.0 \
+    aind-log-utils

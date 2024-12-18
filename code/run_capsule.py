@@ -6,20 +6,20 @@ import numpy as np
 import paired_plane_registration as ppr
 import decrosstalk_roi_image as dri
 import json
-from aind_data_schema.core.processing import Processing
-from aind_data_schema.core.processing import DataProcess, ProcessName, PipelineProcess
+from aind_data_schema.core.processing import DataProcess, ProcessName
 from typing import Union
 from datetime import datetime as dt
 import argparse
 import os
+from aind_log_utils.log import setup_logging
 
 
-def write_output_metadata(
+def write_data_process(
     metadata: dict,
     input_fp: Union[str, Path],
     output_fp: Union[str, Path],
-    url: str,
-    start_date_time: dt,
+    start_time: dt,
+    end_time: dt,
 ) -> None:
     """Writes output metadata to plane processing.json
 
@@ -27,39 +27,25 @@ def write_output_metadata(
     ----------
     metadata: dict
         parameters from suite2p motion correction
-    input_fp: str
-        path to data input
+    raw_movie: str
+        path to raw movies
     output_fp: str
-        path to data output
-    url: str
-        url to code repository
+        path to motion corrected movies
     """
-    original_proc_file = input_fp.parent
-    proc_data = read_json(original_proc_file / "processing.json")
-    prev_processing = Processing(**proc_data)
-    processing = Processing(
-        processing_pipeline=PipelineProcess(
-            processor_full_name="Multplane Ophys Processing Pipeline",
-            pipeline_url=os.getenv("PIPELINE_URL", ""),
-            pipeline_version=os.getenv("PIPELINE_VERSION", ""),
-            data_processes=[
-                DataProcess(
-                    name=ProcessName.VIDEO_PLANE_DECROSSTALK,
-                    software_version=os.getenv("VERSION", ""),
-                    start_date_time=start_date_time,  # TODO: Add actual dt
-                    end_date_time=dt.now(),  # TODO: Add actual dt
-                    input_location=str(input_fp),
-                    output_location=str(output_fp),
-                    code_url=(url),
-                    parameters=metadata,
-                )
-            ],
-        )
+    data_proc = DataProcess(
+        name=ProcessName.VIDEO_PLANE_DECROSSTALK,
+        software_version=os.getenv("VERSION", ""),
+        start_date_time=start_time.isoformat(),
+        end_date_time=end_time.isoformat(),
+        input_location=str(input_fp),
+        output_location=str(output_fp),
+        code_url=(os.getenv("REPO_URL", "")),
+        parameters=metadata,
     )
-    prev_processing.processing_pipeline.data_processes.append(
-        processing.processing_pipeline.data_processes[0]
-    )
-    prev_processing.write_standard_file(output_directory=Path(output_fp).parent)
+    if isinstance(output_fp, str):
+        output_dir = Path(output_fp).parent
+    with open(output_dir / "data_process.json", "w") as f:
+        json.dump(json.loads(data_proc.model_dump_json()), f, indent=4)
 
 
 def decrosstalk_roi_movie(
@@ -160,12 +146,12 @@ def decrosstalk_roi_movie(
                 )
                 f["data"][start_frame:end_frame] = recon_signal_data
         chunk_no += 1
-    write_output_metadata(
+    write_data_process(
         metadata,
         input_dir / "motion_correction" / f"{oeid}_registered.h5",
         decrosstalk_fn,
-        "https://github.com/AllenNeuralDynamics/aind-ophys-decrosstalk-roi-images/tree/development",
         start_time,
+        dt.now(),
     )
     return decrosstalk_fn
 
@@ -417,6 +403,19 @@ if __name__ == "__main__":
     num_frames = 1000
     if debug:
         num_frames = 300
+    subject_fp = next(input_dir.rglob("subject.json"), "")
+    if not subject_fp:
+        raise FileNotFoundError(f"Could not find {subject_fp}")
+    subject_data = read_json(subject_fp)
+    data_description_fp = next(input_dir.rglob("data_description.json"), "")
+    if not data_description_fp:
+        raise FileNotFoundError(f"Could not find {data_description_fp}")
+    data_description = read_json(data_description_fp)
+    subject_id = subject_data["subject_id"]
+    name = data_description["name"]
+    setup_logging(
+        "aind-ophys-ophys-decrosstalk-roi-images", mouse_id=subject_id, session=name
+    )
     experiment_dirs = input_dir.glob("pair*/*")
     oeid1_input_dir = next(experiment_dirs)
     oeid2_input_dir = next(experiment_dirs)
