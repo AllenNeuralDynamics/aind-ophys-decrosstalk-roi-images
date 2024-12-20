@@ -411,10 +411,10 @@ if __name__ == "__main__":
     if not data_description_fp:
         raise FileNotFoundError(f"Could not find {data_description_fp}")
     data_description = read_json(data_description_fp)
-    subject_id = subject_data["subject_id"]
-    name = data_description["name"]
+    subject_id = subject_data.get("subject_id", "")
+    name = data_description.get("name", "")
     setup_logging(
-        "aind-ophys-ophys-decrosstalk-roi-images", mouse_id=subject_id, session=name
+        "aind-ophys-ophys-decrosstalk-roi-images", mouse_id=subject_id, session_name=name
     )
     experiment_dirs = input_dir.glob("pair*/*")
     oeid1_input_dir = next(experiment_dirs)
