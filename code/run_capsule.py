@@ -1,16 +1,18 @@
 """ top level run script """
-from pathlib import Path
-import h5py as h5
+
+import argparse
+import json
 import logging
+import os
+from datetime import datetime as dt
+from pathlib import Path
+from typing import Union
+
+import decrosstalk_roi_image as dri
+import h5py as h5
 import numpy as np
 import paired_plane_registration as ppr
-import decrosstalk_roi_image as dri
-import json
 from aind_data_schema.core.processing import DataProcess, ProcessName
-from typing import Union
-from datetime import datetime as dt
-import argparse
-import os
 from aind_log_utils.log import setup_logging
 
 
@@ -156,7 +158,9 @@ def decrosstalk_roi_movie(
     return decrosstalk_fn
 
 
-def debug_movie(h5_file: Path,input_dir: Path, temp_path: Path = Path("../scratch")) -> Path:
+def debug_movie(
+    h5_file: Path, input_dir: Path, temp_path: Path = Path("../scratch")
+) -> Path:
     """debug movie for development
 
     Parameters
