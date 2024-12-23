@@ -44,9 +44,9 @@ def write_data_process(
         code_url=(os.getenv("REPO_URL", "")),
         parameters=metadata,
     )
-    output_dir = output_fp.parent
     if isinstance(output_fp, str):
         output_dir = Path(output_fp).parent
+    output_dir = output_fp.parent
     with open(output_dir / "data_process.json", "w") as f:
         json.dump(json.loads(data_proc.model_dump_json()), f, indent=4)
 
