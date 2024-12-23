@@ -156,13 +156,15 @@ def decrosstalk_roi_movie(
     return decrosstalk_fn
 
 
-def debug_movie(h5_file: Path, temp_path: Path = Path("../scratch")) -> Path:
+def debug_movie(h5_file: Path,input_dir: Path, temp_path: Path = Path("../scratch")) -> Path:
     """debug movie for development
 
     Parameters
     ----------
     h5_file: Path
         path to h5 file
+    input_dir: Path
+        root input directory
     temp_path: Path, optional
         path to temp directory, default is "../scratch"
 
@@ -172,7 +174,7 @@ def debug_movie(h5_file: Path, temp_path: Path = Path("../scratch")) -> Path:
         path to h5 file
     """
     logging.info("Running in debug %s", h5_file)
-    session_fp = next(h5_file.parent.rglob("session.json"), "")
+    session_fp = next(input_dir.rglob("session.json"), "")
     if not session_fp:
         raise FileNotFoundError(f"Could not find {session_fp}")
     frame_rate_hz = get_frame_rate(session_fp)
@@ -219,7 +221,7 @@ def prepare_cached_paired_plane_movies(
     if not h5_file:
         raise FileNotFoundError(f"Could not find {oeid1}.h5")
     if debug:
-        h5_file = debug_movie(h5_file)
+        h5_file = debug_movie(h5_file, input_dir)
     oeid_mt = next(input_dir.rglob(f"{oeid2}_motion_transform.csv"), "")
     if not oeid_mt:
         raise FileNotFoundError(f"Could not find {oeid2}_motion_transform.csv")
