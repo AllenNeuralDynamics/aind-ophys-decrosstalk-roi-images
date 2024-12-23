@@ -267,16 +267,16 @@ def get_block_size(input_dir: Path) -> list:
     block_size: list
         block size of image
     """
-    processing_fp = next(input_dir.rglob("processing.json"), "")
-    if not processing_fp:
-        raise FileNotFoundError(f"Could not find processing.json in {input_dir}")
-    processing_json = read_json(processing_fp)
+    data_process_fp = next(input_dir.rglob("*data_process.json"), "")
+    if not data_process_fp:
+        raise FileNotFoundError(f"Could not find data_process.json in {input_dir}")
+    data_process_json = read_json(data_process_fp)
     try:
-        block_size = processing_json["processing_pipeline"]["data_processes"][0][
+        block_size = data_process_json[
             "parameters"
         ]["suite2p_args"]["block_size"]
     except KeyError:
-        block_size = processing_json["data_processes"][0]["parameters"]["suite2p_args"][
+        block_size = data_process_json["parameters"]["suite2p_args"][
             "block_size"
         ]
     return block_size
@@ -295,16 +295,16 @@ def check_non_rigid_registration(input_dir: Path) -> bool:
     bool
         True if non-rigid registration was run, False otherwise
     """
-    processing_fp = next(input_dir.rglob("processing.json"), "")
-    if not processing_fp:
-        raise FileNotFoundError(f"Could not find processing.json in {input_dir}")
-    processing_json = read_json(processing_fp)
+    data_process_fp = next(input_dir.rglob("data_process.json"), "")
+    if not data_process_fp:
+        raise FileNotFoundError(f"Could not find data_process.json in {input_dir}")
+    data_process_json = read_json(data_process_fp)
     try:
-        nonrigid = processing_json["processing_pipeline"]["data_processes"][0][
+        nonrigid = data_process_json[
             "parameters"
         ]["suite2p_args"]["nonrigid"]
     except KeyError:
-        nonrigid = processing_json["data_processes"][0]["parameters"]["suite2p_args"][
+        nonrigid = data_process_json["parameters"]["suite2p_args"][
             "nonrigid"
         ]
     return nonrigid
