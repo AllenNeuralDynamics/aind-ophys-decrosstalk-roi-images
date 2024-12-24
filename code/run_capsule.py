@@ -20,6 +20,7 @@ def write_data_process(
     metadata: dict,
     input_fp: Union[str, Path],
     output_fp: Union[str, Path],
+    unique_id: str,
     start_time: dt,
     end_time: dt,
 ) -> None:
@@ -153,6 +154,7 @@ def decrosstalk_roi_movie(
         metadata,
         input_dir / "motion_correction" / f"{oeid}_registered.h5",
         decrosstalk_fn,
+        oeid,
         start_time,
         dt.now(),
     )
