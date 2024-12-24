@@ -45,8 +45,7 @@ def write_data_process(
         code_url=(os.getenv("REPO_URL", "")),
         parameters=metadata,
     )
-    if isinstance(output_fp, str):
-        output_dir = Path(output_fp).parent
+    output_dir = Path(output_fp).parent
     with open(output_dir / f"{unique_id}_data_process.json", "w") as f:
         json.dump(json.loads(data_proc.model_dump_json()), f, indent=4)
 
@@ -422,7 +421,9 @@ if __name__ == "__main__":
     subject_id = subject_data.get("subject_id", "")
     name = data_description.get("name", "")
     setup_logging(
-        "aind-ophys-ophys-decrosstalk-roi-images", mouse_id=subject_id, session_name=name
+        "aind-ophys-ophys-decrosstalk-roi-images",
+        mouse_id=subject_id,
+        session_name=name,
     )
     experiment_dirs = input_dir.glob("pair*/*")
     oeid1_input_dir = next(experiment_dirs)
