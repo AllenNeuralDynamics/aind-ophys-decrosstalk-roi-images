@@ -1,5 +1,5 @@
 metadata_version: 1
-name: LOGGING aind-ophys-decrosstalk-roi-images
+name: aind-ophys-decrosstalk-roi-images
 description: Removes ghost images from paired plane using roi-image based decrosstalk
   method.
 tags:
