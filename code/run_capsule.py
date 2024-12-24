@@ -295,7 +295,7 @@ def check_non_rigid_registration(input_dir: Path) -> bool:
     bool
         True if non-rigid registration was run, False otherwise
     """
-    data_process_fp = next(input_dir.rglob("data_process.json"), "")
+    data_process_fp = next(input_dir.rglob("*data_process.json"), "")
     if not data_process_fp:
         raise FileNotFoundError(f"Could not find data_process.json in {input_dir}")
     data_process_json = read_json(data_process_fp)
