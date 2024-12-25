@@ -1,25 +1,28 @@
 """ top level run script """
-from pathlib import Path
-import h5py as h5
+
+import argparse
+import json
 import logging
+import os
+from datetime import datetime as dt
+from pathlib import Path
+from typing import Union
+
+import decrosstalk_roi_image as dri
+import h5py as h5
 import numpy as np
 import paired_plane_registration as ppr
-import decrosstalk_roi_image as dri
-import json
-from aind_data_schema.core.processing import Processing
-from aind_data_schema.core.processing import DataProcess, ProcessName, PipelineProcess
-from typing import Union
-from datetime import datetime as dt
-import argparse
-import os
+from aind_data_schema.core.processing import DataProcess, ProcessName
+from aind_log_utils.log import setup_logging
 
 
-def write_output_metadata(
+def write_data_process(
     metadata: dict,
     input_fp: Union[str, Path],
     output_fp: Union[str, Path],
-    url: str,
-    start_date_time: dt,
+    unique_id: str,
+    start_time: dt,
+    end_time: dt,
 ) -> None:
     """Writes output metadata to plane processing.json
 
@@ -28,38 +31,27 @@ def write_output_metadata(
     metadata: dict
         parameters from suite2p motion correction
     input_fp: str
-        path to data input
+        path to raw movies
     output_fp: str
-        path to data output
-    url: str
-        url to code repository
+        path to motion corrected movies
+    start_time: dt
+        start time of processing
+    end_time: dt
+        end time of processing
     """
-    original_proc_file = input_fp.parent
-    proc_data = read_json(original_proc_file / "processing.json")
-    prev_processing = Processing(**proc_data)
-    processing = Processing(
-        processing_pipeline=PipelineProcess(
-            processor_full_name="Multplane Ophys Processing Pipeline",
-            pipeline_url=os.getenv("PIPELINE_URL", ""),
-            pipeline_version=os.getenv("PIPELINE_VERSION", ""),
-            data_processes=[
-                DataProcess(
-                    name=ProcessName.VIDEO_PLANE_DECROSSTALK,
-                    software_version=os.getenv("VERSION", ""),
-                    start_date_time=start_date_time,  # TODO: Add actual dt
-                    end_date_time=dt.now(),  # TODO: Add actual dt
-                    input_location=str(input_fp),
-                    output_location=str(output_fp),
-                    code_url=(url),
-                    parameters=metadata,
-                )
-            ],
-        )
+    data_proc = DataProcess(
+        name=ProcessName.VIDEO_PLANE_DECROSSTALK,
+        software_version=os.getenv("VERSION", ""),
+        start_date_time=start_time.isoformat(),
+        end_date_time=end_time.isoformat(),
+        input_location=str(input_fp),
+        output_location=str(output_fp),
+        code_url=(os.getenv("REPO_URL", "")),
+        parameters=metadata,
     )
-    prev_processing.processing_pipeline.data_processes.append(
-        processing.processing_pipeline.data_processes[0]
-    )
-    prev_processing.write_standard_file(output_directory=Path(output_fp).parent)
+    output_dir = Path(output_fp).parent
+    with open(output_dir / f"{unique_id}_decrosstalk_data_process.json", "w") as f:
+        json.dump(json.loads(data_proc.model_dump_json()), f, indent=4)
 
 
 def decrosstalk_roi_movie(
@@ -160,23 +152,28 @@ def decrosstalk_roi_movie(
                 )
                 f["data"][start_frame:end_frame] = recon_signal_data
         chunk_no += 1
-    write_output_metadata(
+    write_data_process(
         metadata,
         input_dir / "motion_correction" / f"{oeid}_registered.h5",
         decrosstalk_fn,
-        "https://github.com/AllenNeuralDynamics/aind-ophys-decrosstalk-roi-images/tree/development",
+        oeid,
         start_time,
+        dt.now(),
     )
     return decrosstalk_fn
 
 
-def debug_movie(h5_file: Path, temp_path: Path = Path("../scratch")) -> Path:
+def debug_movie(
+    h5_file: Path, input_dir: Path, temp_path: Path = Path("../scratch")
+) -> Path:
     """debug movie for development
 
     Parameters
     ----------
     h5_file: Path
         path to h5 file
+    input_dir: Path
+        root input directory
     temp_path: Path, optional
         path to temp directory, default is "../scratch"
 
@@ -186,7 +183,7 @@ def debug_movie(h5_file: Path, temp_path: Path = Path("../scratch")) -> Path:
         path to h5 file
     """
     logging.info("Running in debug %s", h5_file)
-    session_fp = next(h5_file.parent.rglob("session.json"), "")
+    session_fp = next(input_dir.rglob("session.json"), "")
     if not session_fp:
         raise FileNotFoundError(f"Could not find {session_fp}")
     frame_rate_hz = get_frame_rate(session_fp)
@@ -233,7 +230,7 @@ def prepare_cached_paired_plane_movies(
     if not h5_file:
         raise FileNotFoundError(f"Could not find {oeid1}.h5")
     if debug:
-        h5_file = debug_movie(h5_file)
+        h5_file = debug_movie(h5_file, input_dir)
     oeid_mt = next(input_dir.rglob(f"{oeid2}_motion_transform.csv"), "")
     if not oeid_mt:
         raise FileNotFoundError(f"Could not find {oeid2}_motion_transform.csv")
@@ -274,16 +271,16 @@ def get_block_size(input_dir: Path) -> list:
     block_size: list
         block size of image
     """
-    processing_fp = next(input_dir.rglob("processing.json"), "")
-    if not processing_fp:
-        raise FileNotFoundError(f"Could not find processing.json in {input_dir}")
-    processing_json = read_json(processing_fp)
+    data_process_fp = next(input_dir.rglob("*data_process.json"), "")
+    if not data_process_fp:
+        raise FileNotFoundError(f"Could not find data_process.json in {input_dir}")
+    data_process_json = read_json(data_process_fp)
     try:
-        block_size = processing_json["processing_pipeline"]["data_processes"][0][
+        block_size = data_process_json[
             "parameters"
         ]["suite2p_args"]["block_size"]
     except KeyError:
-        block_size = processing_json["data_processes"][0]["parameters"]["suite2p_args"][
+        block_size = data_process_json["parameters"]["suite2p_args"][
             "block_size"
         ]
     return block_size
@@ -302,16 +299,16 @@ def check_non_rigid_registration(input_dir: Path) -> bool:
     bool
         True if non-rigid registration was run, False otherwise
     """
-    processing_fp = next(input_dir.rglob("processing.json"), "")
-    if not processing_fp:
-        raise FileNotFoundError(f"Could not find processing.json in {input_dir}")
-    processing_json = read_json(processing_fp)
+    data_process_fp = next(input_dir.rglob("*data_process.json"), "")
+    if not data_process_fp:
+        raise FileNotFoundError(f"Could not find data_process.json in {input_dir}")
+    data_process_json = read_json(data_process_fp)
     try:
-        nonrigid = processing_json["processing_pipeline"]["data_processes"][0][
+        nonrigid = data_process_json[
             "parameters"
         ]["suite2p_args"]["nonrigid"]
     except KeyError:
-        nonrigid = processing_json["data_processes"][0]["parameters"]["suite2p_args"][
+        nonrigid = data_process_json["parameters"]["suite2p_args"][
             "nonrigid"
         ]
     return nonrigid
@@ -417,6 +414,21 @@ if __name__ == "__main__":
     num_frames = 1000
     if debug:
         num_frames = 300
+    subject_fp = next(input_dir.rglob("subject.json"), "")
+    if not subject_fp:
+        raise FileNotFoundError(f"Could not find {subject_fp}")
+    subject_data = read_json(subject_fp)
+    data_description_fp = next(input_dir.rglob("data_description.json"), "")
+    if not data_description_fp:
+        raise FileNotFoundError(f"Could not find {data_description_fp}")
+    data_description = read_json(data_description_fp)
+    subject_id = subject_data.get("subject_id", "")
+    name = data_description.get("name", "")
+    setup_logging(
+        "aind-ophys-ophys-decrosstalk-roi-images",
+        mouse_id=subject_id,
+        session_name=name,
+    )
     experiment_dirs = input_dir.glob("pair*/*")
     oeid1_input_dir = next(experiment_dirs)
     oeid2_input_dir = next(experiment_dirs)
