@@ -6,7 +6,7 @@ import h5py
 from suite2p.registration import nonrigid
 import shutil
 from aind_ophys_utils.video_utils import encode_video
-
+from aind_ophys_utils.array_utils import normalize_array
 # NOTE: currently this module works in the Session level, someone may want to calculat per
 # experiment
 # TODO: implement per experiment level
@@ -447,5 +447,6 @@ def episodic_mean_fov(
     with h5py.File(save_path, "w") as f:
         f.create_dataset("data", data=mean_fov)
     if save_webm:
-        encode_video(mean_fov, str(webm_path), 3)
+        norm_array = normalize_array(mean_fov)
+        encode_video(norm_array, str(webm_path), 5)
     return save_path
