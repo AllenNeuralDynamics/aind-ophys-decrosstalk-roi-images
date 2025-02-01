@@ -461,18 +461,20 @@ def episodic_mean_fov(
         num_frames = min(num_frames, epoch_interval)
         start_frames = [num_frames // 2 + i * epoch_interval for i in range(num_epochs)]
         assert start_frames[-1] + num_frames < data_length
-
+        avg_img = projection_process(f["data"], projection="avg")
+        max_img = projection_process(f["data"], projection="max")
         # Calculate the mean FOV image for each epoch
         mean_fov = np.zeros((num_epochs, f["data"].shape[1], f["data"].shape[2]))
         for i in range(num_epochs):
             start_frame = start_frames[i]
-            mean_fov[i] = np.mean(
-                f["data"][start_frame : start_frame + num_frames], axis=0
+            mean_fov[i] = projection_process(
+                f["data"][start_frame : start_frame + num_frames], projection="avg"
             )
+            # mean_fov[i] = np.mean(
+            #     f["data"][start_frame : start_frame + num_frames], axis=0
+            # )
     save_path = save_dir / f"{movie_fn.stem}_episodic_mean_fov.h5"
     webm_path = save_dir / f"{movie_fn.stem}_episodic_mean_fov.webm"
-    avg_img = projection_process(mean_fov, projection="avg")
-    max_img = projection_process(mean_fov, projection="max")
     for im, dest in zip(
         [avg_img, max_img],
         [
