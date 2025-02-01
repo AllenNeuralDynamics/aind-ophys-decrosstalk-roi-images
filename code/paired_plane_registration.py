@@ -1,12 +1,14 @@
+import shutil
 from pathlib import Path
-import pandas as pd
+
+import h5py
 import matplotlib.pyplot as plt
 import numpy as np
-import h5py
-from suite2p.registration import nonrigid
-import shutil
-from aind_ophys_utils.video_utils import encode_video
+import pandas as pd
 from aind_ophys_utils.array_utils import normalize_array
+from aind_ophys_utils.video_utils import encode_video
+from suite2p.registration import nonrigid
+
 # NOTE: currently this module works in the Session level, someone may want to calculat per
 # experiment
 # TODO: implement per experiment level
@@ -397,6 +399,31 @@ def histogram_shifts(expt1_shifts, expt2_shifts):
     plt.show()
 
 
+def projection_process(data: np.ndarray, projection: str = "max") -> np.ndarray:
+    """
+
+    Parameters
+    ----------
+    data: np.ndarray
+        nframes x nrows x ncols, uint16
+    projection: str
+        "max" or "avg"
+
+    Returns
+    -------
+    proj: np.ndarray
+        nrows x ncols, uint8
+
+    """
+    if projection == "max":
+        proj = np.max(data, axis=0)
+    elif projection == "avg":
+        proj = np.mean(data, axis=0)
+    else:
+        raise ValueError('projection can be "max" or "avg" not ' f"{projection}")
+    return normalize_array(proj)
+
+
 def episodic_mean_fov(
     movie_fn, save_dir, max_num_epochs=10, num_frames=1000, save_webm=False
 ):
@@ -444,6 +471,17 @@ def episodic_mean_fov(
             )
     save_path = save_dir / f"{movie_fn.stem}_episodic_mean_fov.h5"
     webm_path = save_dir / f"{movie_fn.stem}_episodic_mean_fov.webm"
+    avg_img = projection_process(mean_fov, projection="avg")
+    max_img = projection_process(mean_fov, projection="max")
+    for im, dest in zip(
+        [avg_img, max_img],
+        [
+            save_dir / f"{movie_fn.stem}_avg_img.png",
+            save_dir / f"{movie_fn.stem}_max_img.png",
+        ],
+    ):
+        plt.imsave(dest, im, cmap="gray")
+
     with h5py.File(save_path, "w") as f:
         f.create_dataset("data", data=mean_fov)
     if save_webm:
