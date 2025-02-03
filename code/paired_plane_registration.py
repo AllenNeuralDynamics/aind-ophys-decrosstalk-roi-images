@@ -457,8 +457,9 @@ def episodic_mean_fov(
         num_epochs = min(max_num_epochs, data_length // num_frames)
         epoch_interval = data_length // (
             num_epochs + 1
-        )  # +1 to avoid the very first frame (about half of each epoch)
+        )
         num_frames = min(num_frames, epoch_interval)
+        # ignore half of the epoch length at the beginning and the end
         start_frames = [num_frames // 2 + i * epoch_interval for i in range(num_epochs)]
         assert start_frames[-1] + num_frames < data_length
         avg_img = projection_process(f["data"], projection="avg")
@@ -488,5 +489,5 @@ def episodic_mean_fov(
         f.create_dataset("data", data=mean_fov)
     if save_webm:
         norm_array = normalize_array(mean_fov)
-        encode_video(norm_array, str(webm_path), 5)
+        encode_video(norm_array, str(webm_path), 3)
     return save_path
