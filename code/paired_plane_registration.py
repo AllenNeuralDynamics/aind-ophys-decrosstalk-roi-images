@@ -1,11 +1,13 @@
+import shutil
 from pathlib import Path
-import pandas as pd
+
+import h5py
 import matplotlib.pyplot as plt
 import numpy as np
-import h5py
-from suite2p.registration import nonrigid
-import shutil
+import pandas as pd
+from aind_ophys_utils.array_utils import normalize_array
 from aind_ophys_utils.video_utils import encode_video
+from suite2p.registration import nonrigid
 
 # NOTE: currently this module works in the Session level, someone may want to calculat per
 # experiment
@@ -397,6 +399,31 @@ def histogram_shifts(expt1_shifts, expt2_shifts):
     plt.show()
 
 
+def projection_process(data: np.ndarray, projection: str = "max") -> np.ndarray:
+    """
+
+    Parameters
+    ----------
+    data: np.ndarray
+        nframes x nrows x ncols, uint16
+    projection: str
+        "max" or "avg"
+
+    Returns
+    -------
+    proj: np.ndarray
+        nrows x ncols, uint8
+
+    """
+    if projection == "max":
+        proj = np.max(data, axis=0)
+    elif projection == "avg":
+        proj = np.mean(data, axis=0)
+    else:
+        raise ValueError('projection can be "max" or "avg" not ' f"{projection}")
+    return normalize_array(proj)
+
+
 def episodic_mean_fov(
     movie_fn, save_dir, max_num_epochs=10, num_frames=1000, save_webm=False
 ):
@@ -430,22 +457,37 @@ def episodic_mean_fov(
         num_epochs = min(max_num_epochs, data_length // num_frames)
         epoch_interval = data_length // (
             num_epochs + 1
-        )  # +1 to avoid the very first frame (about half of each epoch)
+        )
         num_frames = min(num_frames, epoch_interval)
+        # ignore half of the epoch length at the beginning and the end
         start_frames = [num_frames // 2 + i * epoch_interval for i in range(num_epochs)]
         assert start_frames[-1] + num_frames < data_length
-
+        avg_img = projection_process(f["data"], projection="avg")
+        max_img = projection_process(f["data"], projection="max")
         # Calculate the mean FOV image for each epoch
         mean_fov = np.zeros((num_epochs, f["data"].shape[1], f["data"].shape[2]))
         for i in range(num_epochs):
             start_frame = start_frames[i]
-            mean_fov[i] = np.mean(
-                f["data"][start_frame : start_frame + num_frames], axis=0
+            mean_fov[i] = projection_process(
+                f["data"][start_frame : start_frame + num_frames], projection="avg"
             )
+            # mean_fov[i] = np.mean(
+            #     f["data"][start_frame : start_frame + num_frames], axis=0
+            # )
     save_path = save_dir / f"{movie_fn.stem}_episodic_mean_fov.h5"
     webm_path = save_dir / f"{movie_fn.stem}_episodic_mean_fov.webm"
+    for im, dest in zip(
+        [avg_img, max_img],
+        [
+            save_dir / f"{movie_fn.stem}_avg_img.png",
+            save_dir / f"{movie_fn.stem}_max_img.png",
+        ],
+    ):
+        plt.imsave(dest, im, cmap="gray")
+
     with h5py.File(save_path, "w") as f:
         f.create_dataset("data", data=mean_fov)
     if save_webm:
-        encode_video(mean_fov, str(webm_path), 3)
+        norm_array = normalize_array(mean_fov)
+        encode_video(norm_array, str(webm_path), 3)
     return save_path
