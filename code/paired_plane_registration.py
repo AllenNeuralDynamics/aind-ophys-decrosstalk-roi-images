@@ -89,7 +89,7 @@ def generate_mean_episodic_fov_pairings_registered_frames(
     for oeid in oeids:
         paired_plane_data[oeid] = {}
         # if (input_dir / oeid / f"{oeid}.h5").is_file():
-        paired_plane_data[oeid]["raw_movie_fp"] = input_dir / oeid / f"{oeid}.h5"
+        paired_plane_data[oeid]["raw_movie_fp"] = input_dir.rglob(f"{oeid}.h5")
         # else:
         #     paired_plane_data[oeid]["raw_movie_fp"] = input_dir / f"{oeid}.h5"
     # to tie the paired suite2p rigid motion transform to the correct oeid
