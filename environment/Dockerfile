@@ -1,6 +1,6 @@
 # hash:sha256:f191fbef486c87980e191423c9254c30d9df5a862ba128cf1b26925b0b945077
 ARG REGISTRY_HOST
-FROM $REGISTRY_HOST/codeocean/jupyterlab:3.0.9-miniconda4.9.2-python3.8-ubuntu20.04
+FROM $REGISTRY_HOST/codeocean/jupyterlab:3.6.1-miniconda4.12.0-python3.9-ubuntu20.04
 
 ARG DEBIAN_FRONTEND=noninteractive
 
@@ -31,3 +31,4 @@ RUN pip install -U --no-cache-dir \
     suite2p==0.14.3 \
     aind-data-schema==1.1.0 \
     aind-log-utils \
+    aind-qcportal-schema
