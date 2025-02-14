@@ -58,19 +58,17 @@ def write_qc_metrics(output_dir, unique_id):
 
     metric = QCMetric(
             name=f"{unique_id} Decrosstalk",
-            description="Episodic mean FOV of decrosstalk movie",
-            reference=str(f"{unique_id}_decrosstalk_episodic_mean_fov.webm"),
-            status_history=[
-                QCStatus(
-                    evaluator='Automated',
-                    timestamp=dt.now(),
-                    status=Status.PASS
-                )
-            ],
-            value="test value"
+        description="Episodic mean FOV of decrosstalk movie",
+        reference=str(f"{unique_id}_decrosstalk_episodic_mean_fov.webm"),
+        status_history=[
+            QCStatus(
+                evaluator='Automated',
+                timestamp=dt.now(),
+                status=Status.PASS
             )
+        ],
+        value="test value"
         )
-
 
     with open(output_dir / f"{unique_id}_decrosstalk_episodic_mean_fov_metric.json", "w") as f:
         json.dump([json.loads(metric.model_dump_json()) for metric in metrics], f, indent=4)
