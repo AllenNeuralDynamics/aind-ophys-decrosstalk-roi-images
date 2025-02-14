@@ -55,11 +55,10 @@ def write_data_process(
         json.dump(json.loads(data_proc.model_dump_json()), f, indent=4)
 
 def write_qc_metrics(output_dir, unique_id):
-
-    metrics = [QCMetric(
+    metric = QCMetric(
         name=f"{unique_id} Decrosstalk",
         description="Episodic mean FOV of decrosstalk movie",
-        reference=str(f"{unique_id}_decrosstalk_episodic_mean_fov.webm"),
+        reference=f"{unique_id}_decrosstalk_episodic_mean_fov.webm",
         status_history=[
             QCStatus(
                 evaluator='Automated',
@@ -68,10 +67,11 @@ def write_qc_metrics(output_dir, unique_id):
             )
         ],
         value="test value"
-    )]
+    )
 
     with open(output_dir / f"{unique_id}_decrosstalk_episodic_mean_fov_metric.json", "w") as f:
-        json.dump([json.loads(metric.model_dump_json()) for metric in metrics], f, indent=4)
+        json.dump(json.loads(metric.model_dump_json()), f, indent=4)
+
 
 
 def decrosstalk_roi_movie(
