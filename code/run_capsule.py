@@ -15,8 +15,6 @@ import paired_plane_registration as ppr
 from aind_data_schema.core.processing import DataProcess, ProcessName
 from aind_log_utils.log import setup_logging
 from aind_data_schema.core.quality_control import (QCMetric, Status, QCStatus)
-from aind_qcportal_schema.metric_value import DropdownMetric
-
 
 
 def write_data_process(
@@ -69,16 +67,7 @@ def write_qc_metrics(output_dir, unique_id):
                     status=Status.PASS
                 )
             ],
-            value=DropdownMetric(
-                value="Reasonable",
-                options=[
-                    "Reasonable",
-                    "Unreasonable",
-                ],
-                status=[
-                    Status.PASS,
-                    Status.FAIL,
-                ]
+            value="test value"
             )
         )
 
