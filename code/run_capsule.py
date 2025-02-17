@@ -56,7 +56,17 @@ def write_data_process(
         json.dump(json.loads(data_proc.model_dump_json()), f, indent=4)
 
 
-def write_qc_metrics(output_dir, unique_id):
+def write_qc_metrics(output_dir, unique_id) -> None:
+    """Write QC metrics to output directory
+
+    Parameters
+    ----------
+    output_dir: Path
+        path to output data
+    unique_id: str
+        unique identifier for experiment
+    """
+
     metric = QCMetric(
         name=f"{unique_id} Decrosstalk",
         description="Episodic mean FOV of decrosstalk movie",
