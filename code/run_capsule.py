@@ -70,7 +70,7 @@ def write_qc_metrics(output_dir, unique_id) -> None:
     metric = QCMetric(
         name=f"{unique_id} Decrosstalk",
         description="Episodic mean FOV of decrosstalk movie",
-        reference=f"{unique_id}_decrosstalk_episodic_mean_fov.webm",
+        reference=f"{unique_id}/decrosstalk/{unique_id}_decrosstalk_episodic_mean_fov.webm",
         status_history=[
             QCStatus(evaluator="Automated", timestamp=dt.now(), status=Status.PASS)
         ],
