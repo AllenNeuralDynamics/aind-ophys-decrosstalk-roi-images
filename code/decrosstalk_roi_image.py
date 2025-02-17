@@ -1,12 +1,13 @@
 from pathlib import Path
-import numpy as np
+from typing import Tuple
+
 import h5py
 import matplotlib
 import matplotlib.pyplot as plt
-from cellpose import models as cp_models
-import skimage
+import numpy as np
 import pandas as pd
-from typing import Tuple
+import skimage
+from cellpose import models as cp_models
 
 
 def get_motion_correction_crop_xy_range_from_both_planes(
@@ -42,7 +43,9 @@ def get_motion_correction_crop_xy_range_from_both_planes(
     return xrange, yrange
 
 
-def get_motion_correction_crop_xy_range(oeid: int, input_dir: Path) -> Tuple[list, list]:
+def get_motion_correction_crop_xy_range(
+    oeid: int, input_dir: Path
+) -> Tuple[list, list]:
     """Get x-y ranges to crop motion-correction frame rolling
 
     TODO: move to utils

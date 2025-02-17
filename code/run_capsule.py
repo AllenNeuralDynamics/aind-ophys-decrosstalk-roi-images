@@ -92,7 +92,7 @@ def decrosstalk_roi_movie(
         )
     )
 
-    ## Just to get alpha and beta for the experiment using the episodic mean fov paired movie
+    # Just to get alpha and beta for the experiment using the episodic mean fov paired movie
     (
         _,
         alpha_list,
@@ -109,7 +109,7 @@ def decrosstalk_roi_movie(
         "paired_emf": str(paired_reg_emf_fn),
     }
 
-    ## To reduce RAM usage, you can get/save the decrosstalk_data in chunks:
+    # To reduce RAM usage, you can get/save the decrosstalk_data in chunks:
     chunk_size = 5000  # num of frames in each chunk
 
     with h5.File(input_dir / "motion_correction" / f"{oeid}_registered.h5", "r") as f:
@@ -120,12 +120,15 @@ def decrosstalk_roi_movie(
     assert end_frames[-1] == data_length
     decrosstalk_fn = output_dir / f"{oeid}_decrosstalk.h5"
 
-    # generate the decrosstalk movie with alpha and beta values calculated above using the full paired registered movie
+    # generate the decrosstalk movie with alpha and beta values calculated above
+    # using the full paired registered movie
     chunk_no = 0
     for start_frame, end_frame in zip(start_frames, end_frames):
         with h5.File(paired_oeid_reg_to_oeid_full_fn, "r") as f:
             paired_data = f["data"][start_frame:end_frame]
-        with h5.File(input_dir / "motion_correction" / f"{oeid}_registered.h5", "r") as f:
+        with h5.File(
+            input_dir / "motion_correction" / f"{oeid}_registered.h5", "r"
+        ) as f:
             signal_data = f["data"][start_frame:end_frame]
         recon_signal_data = np.zeros_like(signal_data, dtype=np.int16)
         for temp_frame_index in range(signal_data.shape[0]):
@@ -276,13 +279,9 @@ def get_block_size(input_dir: Path) -> list:
         raise FileNotFoundError(f"Could not find data_process.json in {input_dir}")
     data_process_json = read_json(data_process_fp)
     try:
-        block_size = data_process_json[
-            "parameters"
-        ]["suite2p_args"]["block_size"]
+        block_size = data_process_json["parameters"]["suite2p_args"]["block_size"]
     except KeyError:
-        block_size = data_process_json["parameters"]["suite2p_args"][
-            "block_size"
-        ]
+        block_size = data_process_json["parameters"]["suite2p_args"]["block_size"]
     return block_size
 
 
@@ -304,13 +303,9 @@ def check_non_rigid_registration(input_dir: Path) -> bool:
         raise FileNotFoundError(f"Could not find data_process.json in {input_dir}")
     data_process_json = read_json(data_process_fp)
     try:
-        nonrigid = data_process_json[
-            "parameters"
-        ]["suite2p_args"]["nonrigid"]
+        nonrigid = data_process_json["parameters"]["suite2p_args"]["nonrigid"]
     except KeyError:
-        nonrigid = data_process_json["parameters"]["suite2p_args"][
-            "nonrigid"
-        ]
+        nonrigid = data_process_json["parameters"]["suite2p_args"]["nonrigid"]
     return nonrigid
 
 
@@ -339,7 +334,7 @@ def run_decrosstalk(
     num_frames: int, optional
         number of frames to process, default is 1000
     """
-    logging.info(f"Running paired plane registration...")
+    logging.info("Running paired plane registration...")
     # create cached registered to pair movie for each pair
 
     # create the EMF of the registered to pair movie from cache
@@ -348,12 +343,14 @@ def run_decrosstalk(
     ppr.episodic_mean_fov(
         input_dir / "motion_correction" / f"{oeid}_registered.h5", output_dir
     )
-    logging.info(f"Creating movie...")
+    logging.info("Creating movie...")
     # run decrosstalk
     decrosstalk = decrosstalk_roi_movie(
         oeid, paired_oeid, input_dir, output_dir, start_time
     )
-    ppr.episodic_mean_fov(decrosstalk, output_dir, num_frames=num_frames, save_webm=True)
+    ppr.episodic_mean_fov(
+        decrosstalk, output_dir, num_frames=num_frames, save_webm=True
+    )
 
 
 def make_output_dirs(oeid: str, output_dir: Path) -> Path:

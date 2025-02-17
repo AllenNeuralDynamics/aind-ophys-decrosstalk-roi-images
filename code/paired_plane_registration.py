@@ -455,9 +455,7 @@ def episodic_mean_fov(
     with h5py.File(movie_fn, "r") as f:
         data_length = f["data"].shape[0]
         num_epochs = min(max_num_epochs, data_length // num_frames)
-        epoch_interval = data_length // (
-            num_epochs + 1
-        )
+        epoch_interval = data_length // (num_epochs + 1)
         num_frames = min(num_frames, epoch_interval)
         # ignore half of the epoch length at the beginning and the end
         start_frames = [num_frames // 2 + i * epoch_interval for i in range(num_epochs)]
