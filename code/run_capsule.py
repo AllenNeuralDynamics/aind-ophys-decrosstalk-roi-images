@@ -13,7 +13,9 @@ import h5py as h5
 import numpy as np
 import paired_plane_registration as ppr
 from aind_data_schema.core.processing import DataProcess, ProcessName
+from aind_data_schema.core.quality_control import QCMetric, QCStatus, Status
 from aind_log_utils.log import setup_logging
+from aind_qcportal_schema.metric_value import DropdownMetric
 
 
 def write_data_process(
@@ -52,6 +54,43 @@ def write_data_process(
     output_dir = Path(output_fp).parent
     with open(output_dir / f"{unique_id}_decrosstalk_data_process.json", "w") as f:
         json.dump(json.loads(data_proc.model_dump_json()), f, indent=4)
+
+
+def write_qc_metrics(output_dir: Path, unique_id: str) -> None:
+    """Write QC metrics to output directory
+
+    Parameters
+    ----------
+    output_dir: Path
+        path to output data
+    unique_id: str
+        unique identifier for experiment
+    """
+
+    metric = QCMetric(
+        name=f"{unique_id} Decrosstalk",
+        description="Episodic mean FOV of decrosstalk movie",
+        reference=f"{unique_id}/decrosstalk/{unique_id}_decrosstalk_episodic_mean_fov.webm",
+        status_history=[
+            QCStatus(evaluator="Automated", timestamp=dt.now(), status=Status.PASS)
+        ],
+        value=DropdownMetric(
+            value="Reasonable",
+            options=[
+                "Reasonable",
+                "Unreasonable",
+            ],
+            status=[
+                Status.PASS,
+                Status.FAIL,
+            ],
+        ),
+    )
+
+    with open(
+        output_dir / f"{unique_id}_decrosstalk_episodic_mean_fov_metric.json", "w"
+    ) as f:
+        json.dump(json.loads(metric.model_dump_json()), f, indent=4)
 
 
 def decrosstalk_roi_movie(
@@ -455,3 +494,6 @@ if __name__ == "__main__":
     (Path("../scratch/") / f"{oeid1}_registered_to_pair.h5").unlink()
     print("unlinking paired registered flies")
     (Path("../scratch/") / f"{oeid2}_registered_to_pair.h5").unlink()
+
+    write_qc_metrics(oeid1_output_dir, oeid1)
+    write_qc_metrics(oeid2_output_dir, oeid2)

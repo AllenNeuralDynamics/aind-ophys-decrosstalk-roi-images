@@ -30,4 +30,5 @@ RUN pip install -U --no-cache-dir \
     scipy==1.10.1 \
     suite2p==0.14.3 \
     aind-data-schema==1.1.0 \
-    aind-log-utils
+    aind-log-utils \
+    aind-qcportal-schema
