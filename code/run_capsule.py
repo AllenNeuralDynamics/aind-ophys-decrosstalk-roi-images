@@ -56,7 +56,7 @@ def write_data_process(
         json.dump(json.loads(data_proc.model_dump_json()), f, indent=4)
 
 
-def write_qc_metrics(output_dir, unique_id) -> None:
+def write_qc_metrics(output_dir: Path, unique_id: str) -> None:
     """Write QC metrics to output directory
 
     Parameters
