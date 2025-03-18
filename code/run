@@ -11,14 +11,14 @@ if ls /data/pair*.txt 1> /dev/null 2>&1; then
     echo "File found: $file"
     pair_dir=${file%%.txt}
     log_file="$pair_dir/link_errors.log"
-    mkdir $pair_dir
+    mkdir -p $pair_dir
     ls $pair_dir
     while read -r line; do
-	ln -s $line $pair_dir
+        ln -s $line $pair_dir
     done < "$file"
-else
-    echo "No files found with the pattern pair*.txt"
+    ls /data/pair*/
+    ls /data/pair*/*
 fi
-ls /data/pair*/
-ls /data/pair*/*
+
+# Run the Python code regardless of whether the pair*.txt files exist
 python -u run_capsule.py "$@"
