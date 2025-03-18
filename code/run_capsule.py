@@ -1,13 +1,14 @@
-""" top level run script """
+"""top level run script"""
 
 import argparse
 import json
 import logging
 import os
+import shutil
+import sys
 from datetime import datetime as dt
 from pathlib import Path
 from typing import Union
-import sys
 
 import decrosstalk_roi_image as dri
 import h5py as h5
@@ -166,9 +167,7 @@ def decrosstalk_roi_movie(
     for start_frame, end_frame in zip(start_frames, end_frames):
         with h5.File(paired_oeid_reg_to_oeid_full_fn, "r") as f:
             paired_data = f["data"][start_frame:end_frame]
-        with h5.File(
-            input_dir / "motion_correction" / f"{oeid}_registered.h5", "r"
-        ) as f:
+        with h5.File(input_dir / "motion_correction" / f"{oeid}_registered.h5", "r") as f:
             signal_data = f["data"][start_frame:end_frame]
         recon_signal_data = np.zeros_like(signal_data, dtype=np.int16)
         for temp_frame_index in range(signal_data.shape[0]):
@@ -388,9 +387,7 @@ def run_decrosstalk(
     decrosstalk = decrosstalk_roi_movie(
         oeid, paired_oeid, input_dir, output_dir, start_time
     )
-    ppr.episodic_mean_fov(
-        decrosstalk, output_dir, num_frames=num_frames, save_webm=True
-    )
+    ppr.episodic_mean_fov(decrosstalk, output_dir, num_frames=num_frames, save_webm=True)
 
 
 def make_output_dirs(oeid: str, output_dir: Path) -> Path:
@@ -440,9 +437,9 @@ def get_frame_rate(session_fp: Path) -> float:
         frame_rate_hz = float(frame_rate_hz)
     return frame_rate_hz
 
+
 def run(args: argparse.Namespace) -> None:
-    """Run decrosstalk processing"
-    """
+    """Run decrosstalk processing" """
     input_dir = Path("../data/").resolve()
     output_dir = Path("../results/").resolve()
     debug = args.debug
@@ -503,7 +500,9 @@ if __name__ == "__main__":
     parser.add_argument("--debug", action="store_true")
     args = parser.parse_args()
     input_dir = Path("../data/").resolve()
-    if next(input_dir.glob("output")).is_file() or next(input_dir.glob("single.txt")).is_file():
+    if next(input_dir.glob("output")).is_file():
         sys.exit()
+    elif next(input_dir.glob("single.txt")).is_file():
+        shutil.copyfile(next(input_dir.glob("single.txt")), "/results/single.txt")
     else:
         run(args)
