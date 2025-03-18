@@ -500,7 +500,7 @@ if __name__ == "__main__":
     parser.add_argument("--debug", action="store_true")
     args = parser.parse_args()
     input_dir = Path("../data/").resolve()
-    if next(input_dir.glob("output")).is_file():
+    if next(input_dir.glob("output"), "").is_file():
         sys.exit()
     elif next(input_dir.glob("single.txt")).is_file():
         shutil.copyfile(next(input_dir.glob("single.txt")), "/results/single.txt")
