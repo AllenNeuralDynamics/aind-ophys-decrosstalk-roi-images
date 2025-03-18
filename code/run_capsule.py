@@ -7,6 +7,7 @@ import os
 from datetime import datetime as dt
 from pathlib import Path
 from typing import Union
+import sys
 
 import decrosstalk_roi_image as dri
 import h5py as h5
@@ -439,11 +440,9 @@ def get_frame_rate(session_fp: Path) -> float:
         frame_rate_hz = float(frame_rate_hz)
     return frame_rate_hz
 
-
-if __name__ == "__main__":
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--debug", action="store_true")
-    args = parser.parse_args()
+def run(args: argparse.Namespace) -> None:
+    """Run decrosstalk processing"
+    """
     input_dir = Path("../data/").resolve()
     output_dir = Path("../results/").resolve()
     debug = args.debug
@@ -497,3 +496,14 @@ if __name__ == "__main__":
 
     write_qc_metrics(oeid1_output_dir, oeid1)
     write_qc_metrics(oeid2_output_dir, oeid2)
+
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--debug", action="store_true")
+    args = parser.parse_args()
+    input_dir = Path("../data/").resolve()
+    if next(input_dir.glob("output")).is_file() or next(input_dir.glob("single.txt")).is_file():
+        sys.exit()
+    else:
+        run(args)
