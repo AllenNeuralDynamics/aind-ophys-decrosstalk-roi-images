@@ -501,7 +501,6 @@ if __name__ == "__main__":
     args = parser.parse_args()
     input_dir = Path("../data/").resolve()
     nf_output = next(input_dir.glob("output"), "")
-    single_output = next(input_dir.glob("single.txt"), "")
     if nf_output:
         sys.exit()
     elif single_output:
