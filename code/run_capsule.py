@@ -505,6 +505,6 @@ if __name__ == "__main__":
     if nf_output:
         sys.exit()
     elif single_output:
-        shutil.copyfile(single_output, "/results/single.txt")
+        sys.exit()
     else:
         run(args)
