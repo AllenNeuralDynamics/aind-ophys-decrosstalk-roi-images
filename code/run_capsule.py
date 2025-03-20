@@ -505,6 +505,14 @@ if __name__ == "__main__":
     if nf_output:
         sys.exit()
     elif single_output:
+        write_data_process(
+            {},
+            "no data",
+            "no data",
+            "no data",
+            dt.now(),
+            dt.now(),
+        )
         sys.exit()
     else:
         run(args)
