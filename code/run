@@ -21,4 +21,4 @@ else
 fi
 ls /data/pair*/
 ls /data/pair*/*
-python -u run_capsule.py "$@" --debug
+python -u run_capsule.py "$@"
