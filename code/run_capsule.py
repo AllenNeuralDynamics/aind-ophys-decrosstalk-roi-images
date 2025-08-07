@@ -1,4 +1,4 @@
-""" top level run script """
+"""top level run script"""
 
 import argparse
 import json
@@ -442,7 +442,14 @@ def get_frame_rate(session_fp: Path) -> float:
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--debug", nargs='?', const=True, default=False, type=lambda x: x.lower() == 'true', help="Enable debug mode (use --debug true or --debug false)")
+    parser.add_argument(
+        "--debug",
+        nargs="?",
+        const=True,
+        default=False,
+        type=lambda x: x.lower() == "true",
+        help="Enable debug mode (use --debug true or --debug false)",
+    )
     args = parser.parse_args()
     input_dir = Path("../data/").resolve()
     output_dir = Path("../results/").resolve()
