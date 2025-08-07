@@ -442,7 +442,7 @@ def get_frame_rate(session_fp: Path) -> float:
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--debug", action="store_true", default=False, help="Enable debug mode")
+    parser.add_argument("--debug", nargs='?', const=True, default=False, type=lambda x: x.lower() == 'true', help="Enable debug mode (use --debug true or --debug false)")
     args = parser.parse_args()
     input_dir = Path("../data/").resolve()
     output_dir = Path("../results/").resolve()
