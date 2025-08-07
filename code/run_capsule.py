@@ -454,6 +454,8 @@ if __name__ == "__main__":
     input_dir = Path("../data/").resolve()
     output_dir = Path("../results/").resolve()
     debug = args.debug
+    if debug:
+        logging.info("Running in debug mode")
     num_frames = 1000
     if debug:
         num_frames = 300
