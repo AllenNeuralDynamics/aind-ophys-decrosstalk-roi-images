@@ -450,6 +450,7 @@ if __name__ == "__main__":
         type=lambda x: x.lower() == "true",
         help="Enable debug mode (use --debug true or --debug false)",
     )
+
     args = parser.parse_args()
     input_dir = Path("../data/").resolve()
     output_dir = Path("../results/").resolve()
