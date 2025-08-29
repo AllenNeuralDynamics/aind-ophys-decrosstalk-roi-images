@@ -421,7 +421,7 @@ def projection_process(data: np.ndarray, projection: str = "max") -> np.ndarray:
         proj = np.mean(data, axis=0)
     else:
         raise ValueError('projection can be "max" or "avg" not ' f"{projection}")
-    return normalize_array(proj)
+    return proj
 
 
 def episodic_mean_fov(
