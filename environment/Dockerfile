@@ -11,6 +11,7 @@ COPY git-askpass /
 ENV PIPELINE_URL=https://codeocean.allenneuraldynamics.org/capsule/6127754/tree
 ENV PIPELINE_VERSION=1.0
 ENV VERSION=5.0
+ENV CELLPOSE_LOCAL_MODELS_PATHS=/root/capsule
 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
