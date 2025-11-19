@@ -399,29 +399,57 @@ def histogram_shifts(expt1_shifts, expt2_shifts):
     plt.show()
 
 
-def projection_process(data: np.ndarray, projection: str = "max") -> np.ndarray:
+def projection_process_chunked(h5_dataset, start_idx=None, end_idx=None, 
+                               projection="max", chunk_size=100):
     """
-
+    Memory-efficient projection by processing chunks
+    
     Parameters
     ----------
-    data: np.ndarray
-        nframes x nrows x ncols, uint16
-    projection: str
+    h5_dataset : h5py.Dataset
+        The HDF5 dataset to process
+    start_idx, end_idx : int, optional
+        Range to process (None means full dataset)
+    projection : str
         "max" or "avg"
-
-    Returns
-    -------
-    proj: np.ndarray
-        nrows x ncols, uint8
-
+    chunk_size : int
+        Number of frames to load at once
     """
-    if projection == "max":
-        proj = np.max(data, axis=0)
-    elif projection == "avg":
-        proj = np.mean(data, axis=0)
+    start_idx = start_idx or 0
+    end_idx = end_idx or h5_dataset.shape[0]
+    
+    if projection == "avg":
+        running_sum = None
+        count = 0
+        
+        for i in range(start_idx, end_idx, chunk_size):
+            chunk_end = min(i + chunk_size, end_idx)
+            chunk = h5_dataset[i:chunk_end]
+            
+            if running_sum is None:
+                running_sum = np.sum(chunk, axis=0, dtype=np.float64)
+            else:
+                running_sum += np.sum(chunk, axis=0, dtype=np.float64)
+            count += (chunk_end - i)
+            
+        return (running_sum / count).astype(np.float32)
+        
+    elif projection == "max":
+        running_max = None
+        
+        for i in range(start_idx, end_idx, chunk_size):
+            chunk_end = min(i + chunk_size, end_idx)
+            chunk = h5_dataset[i:chunk_end]
+            chunk_max = np.max(chunk, axis=0)
+            
+            if running_max is None:
+                running_max = chunk_max
+            else:
+                running_max = np.maximum(running_max, chunk_max)
+                
+        return running_max
     else:
-        raise ValueError('projection can be "max" or "avg" not ' f"{projection}")
-    return proj
+        raise ValueError(f'projection must be "max" or "avg", not {projection}')
 
 
 def episodic_mean_fov(
@@ -460,18 +488,19 @@ def episodic_mean_fov(
         # ignore half of the epoch length at the beginning and the end
         start_frames = [num_frames // 2 + i * epoch_interval for i in range(num_epochs)]
         assert start_frames[-1] + num_frames < data_length
-        avg_img = projection_process(f["data"], projection="avg")
-        max_img = projection_process(f["data"], projection="max")
+        avg_img = projection_process_chunked(f["data"], projection="avg", chunk_size=100)
+        max_img = projection_process_chunked(f["data"], projection="max", chunk_size=100)
         # Calculate the mean FOV image for each epoch
         mean_fov = np.zeros((num_epochs, f["data"].shape[1], f["data"].shape[2]))
         for i in range(num_epochs):
             start_frame = start_frames[i]
-            mean_fov[i] = projection_process(
-                f["data"][start_frame : start_frame + num_frames], projection="avg"
+            mean_fov[i] = projection_process_chunked(
+                f["data"], 
+                start_idx=start_frame,
+                end_idx=start_frame + num_frames,
+                projection="avg",
+                chunk_size=100
             )
-            # mean_fov[i] = np.mean(
-            #     f["data"][start_frame : start_frame + num_frames], axis=0
-            # )
     save_path = save_dir / f"{movie_fn.stem}_episodic_mean_fov.h5"
     webm_path = save_dir / f"{movie_fn.stem}_episodic_mean_fov.webm"
     for im, dest in zip(
