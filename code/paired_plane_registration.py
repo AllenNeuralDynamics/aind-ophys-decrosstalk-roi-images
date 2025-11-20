@@ -399,14 +399,14 @@ def histogram_shifts(expt1_shifts, expt2_shifts):
     plt.show()
 
 
-def projection_process_chunked(h5_dataset: h5py.File, start_idx: int=None, end_idx: int=None, 
+def projection_process_chunked(h5_dataset: h5py._hl.dataset.Dataset, start_idx: int=None, end_idx: int=None, 
                                projection="max", chunk_size=100) -> np.ndarray:
     """
     Memory-efficient projection by processing chunks
     
     Parameters
     ----------
-    h5_dataset : h5py.Dataset
+    h5_dataset : h5py._hl.dataset.Dataset
         The HDF5 dataset to process
     start_idx, end_idx : int, optional
         Range to process (None means full dataset)
