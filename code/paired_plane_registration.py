@@ -415,8 +415,10 @@ def projection_process_chunked(h5_dataset: h5py.File, start_idx: int=None, end_i
     chunk_size : int
         Number of frames to load at once
     """
-    start_idx = start_idx or 0
-    end_idx = end_idx or h5_dataset.shape[0]
+    start_idx = 0 if start_idx is None else max(0, start_idx)
+    end_idx = h5_dataset.shape[0] if end_idx is None else min(h5_dataset.shape[0], end_idx)
+    if start_idx >= end_idx:
+        raise ValueError("Start index must be less than end index")
     
     if projection == "avg":
         running_sum = None
