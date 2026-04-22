@@ -9,6 +9,12 @@ import pandas as pd
 import skimage
 from cellpose import models as cp_models
 
+from cellpose import utils
+
+def _override_to_fail_download_func(*args, **kwargs):
+    raise RuntimeError("Network access attempted for model download")
+
+utils.download_url_to_file = _override_to_fail_download_func
 
 def get_motion_correction_crop_xy_range_from_both_planes(
     oeid: int, paired_id: int, input_dir: Path
