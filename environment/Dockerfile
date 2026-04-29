@@ -1,17 +1,14 @@
-# hash:sha256:f191fbef486c87980e191423c9254c30d9df5a862ba128cf1b26925b0b945077
+# hash:sha256:53ee15f73dedebcd7181088ef97b2aaea78ee77ba0157508d02db387b651e0c4
 ARG REGISTRY_HOST
-FROM $REGISTRY_HOST/codeocean/jupyterlab:3.6.1-miniconda4.12.0-python3.9-ubuntu20.04
+FROM $REGISTRY_HOST/codeocean/jupyterlab:3.0.9-miniconda4.9.2-python3.8-ubuntu20.04
 
 ARG DEBIAN_FRONTEND=noninteractive
-
 ARG GIT_ASKPASS
-ARG GIT_ACCESS_TOKEN
-COPY git-askpass /
+COPY git-ask-pass /
 
 ENV PIPELINE_URL=https://codeocean.allenneuraldynamics.org/capsule/6127754/tree
 ENV PIPELINE_VERSION=1.0
 ENV VERSION=5.0
-ENV CELLPOSE_LOCAL_MODELS_PATH=/root/capsule
 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
@@ -19,6 +16,7 @@ RUN apt-get update \
     && rm -rf /var/lib/apt/lists/*
 
 RUN pip install -U --no-cache-dir \
+    aind-data-schema==0.22.0 \
     aind-ophys-utils==0.0.7 \
     cellpose==2.2.3 \
     h5py==3.10.0 \
@@ -29,7 +27,4 @@ RUN pip install -U --no-cache-dir \
     pydantic==2.8.2 \
     scikit-image==0.21.0 \
     scipy==1.10.1 \
-    suite2p==0.14.3 \
-    aind-data-schema==1.1.0 \
-    aind-log-utils \
-    aind-qcportal-schema
+    suite2p==0.14.3
