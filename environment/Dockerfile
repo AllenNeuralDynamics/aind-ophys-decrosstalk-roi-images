@@ -1,4 +1,4 @@
-# hash:sha256:53ee15f73dedebcd7181088ef97b2aaea78ee77ba0157508d02db387b651e0c4
+# hash:sha256:9580348207ef3b60248f275c9a10187b1159574a3d555999781439d35850b626
 ARG REGISTRY_HOST
 FROM $REGISTRY_HOST/codeocean/jupyterlab:3.0.9-miniconda4.9.2-python3.8-ubuntu20.04
 
@@ -9,6 +9,7 @@ COPY git-ask-pass /
 ENV PIPELINE_URL=https://codeocean.allenneuraldynamics.org/capsule/6127754/tree
 ENV PIPELINE_VERSION=1.0
 ENV VERSION=5.0
+ENV CELLPOSE_LOCAL_MODELS_PATH=/root/capsule
 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
