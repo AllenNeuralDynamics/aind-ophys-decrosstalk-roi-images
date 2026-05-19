@@ -277,6 +277,9 @@ def prepare_cached_paired_plane_movies(
     if not oeid_mt:
         raise FileNotFoundError(f"Could not find {oeid2}_motion_transform.csv")
     transform_df = ppr.get_s2p_motion_transform(oeid_mt)
+    if debug:
+        with h5.File(h5_file, "r") as f:
+            transform_df = transform_df.iloc[: f["data"].shape[0]].reset_index(drop=True)
     return ppr.paired_plane_cached_movie(
         h5_file, transform_df, non_rigid=non_rigid, block_size=block_size
     )
