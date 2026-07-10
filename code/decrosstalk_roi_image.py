@@ -1,3 +1,4 @@
+import warnings
 from pathlib import Path
 from typing import Tuple
 
@@ -349,6 +350,69 @@ def mean_landscape_quality(mean_norm_mi_list, grid_interval=0.01, coarse_step=0.
             vals = np.array([p[k] for p in per], dtype=float)
             out[f"{k}_{region}"] = float(np.nanmean(vals)) if np.isfinite(vals).any() else float("nan")
     return out
+
+
+def _cell_mask(img, dilate=2):
+    """Boolean mask of cell footprints from basic_segmentation, with holes filled (so the
+    dim nucleus inside a detected cell rim is included, not left as a low-value pixel) and
+    a small dilation for a margin. Used to EXCLUDE cells before estimating background."""
+    m = basic_segmentation(img) > 0
+    m = ndimage.binary_fill_holes(m)
+    if dilate:
+        m = ndimage.binary_dilation(m, iterations=dilate)
+    return m
+
+
+def background_correlation(sig_mean, pai_mean, block=16, min_valid=0.3,
+                           gauss_sigma=30, dilate=2):
+    """Low-frequency background correlation between a plane and its paired plane (both
+    full-session mean FOVs, same registration frame), with CELLS REMOVED.
+
+    The MI model assumes the vasculature-shadow / illumination background is shared between
+    the two planes; for far-apart (deep) pairs this can break. Background is estimated after
+    masking out segmented cells (basic_segmentation, holes filled so dim nuclei are excluded
+    too, dilated) in EITHER plane, then the two planes are correlated:
+      - ``bg_corr``       : per-block MEDIAN of the non-cell pixels (neuropil/vasculature
+                            background). Primary metric.
+      - ``bg_corr_gauss`` : naive heavy-Gaussian low-pass, no cell removal (reference).
+    Invalid (<=0, warped-border) pixels also masked; blocks below min_valid valid fraction
+    dropped (no motion crop needed). bg_corr ~1 = shared background (assumption holds),
+    lower = patterns differ. Falls monotonically with pair separation (0-1 ~0.77 ->
+    6-7 ~0.43). Identical to decrosstalk_qc.metrics.background_correlation.
+
+    Returns dict(bg_corr, bg_corr_gauss, n_blocks).
+    """
+    s = np.asarray(sig_mean, dtype=float)
+    p = np.asarray(pai_mean, dtype=float)
+    H, W = s.shape
+    h, w = (H // block) * block, (W // block) * block
+    s, p = s[:h, :w], p[:h, :w]
+    infov = np.isfinite(s) & np.isfinite(p) & (s > 0) & (p > 0)
+    cells = _cell_mask(s, dilate) | _cell_mask(p, dilate)  # cell in either plane
+    valid = infov & ~cells
+    nb = (h // block, w // block)
+    frac = valid.reshape(nb[0], block, nb[1], block).mean(axis=(1, 3))
+    goodblk = frac >= min_valid
+
+    def _coarse_median(img):
+        a = np.where(valid, img, np.nan).reshape(nb[0], block, nb[1], block)
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            return np.nanmedian(a, axis=(1, 3))
+
+    def _coarse_gauss(img):
+        g = ndimage.gaussian_filter(np.where(infov, img, 0.0), gauss_sigma)
+        return g.reshape(nb[0], block, nb[1], block).mean(axis=(1, 3))
+
+    def _corr(x, y):
+        m = goodblk & np.isfinite(x) & np.isfinite(y)
+        return float(np.corrcoef(x[m], y[m])[0, 1]) if int(m.sum()) >= 10 else float("nan")
+
+    return {
+        "bg_corr": _corr(_coarse_median(s), _coarse_median(p)),
+        "bg_corr_gauss": _corr(_coarse_gauss(s), _coarse_gauss(p)),
+        "n_blocks": int(goodblk.sum()),
+    }
 
 
 # Fixed axis caps for the landscape-quality panels so pages are comparable across sessions

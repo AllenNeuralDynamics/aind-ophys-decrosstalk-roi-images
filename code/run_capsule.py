@@ -174,11 +174,26 @@ def apply_decrosstalk_movie(
     # grid, coarse-grid fit. METRIC VALUES ONLY -- no pass/warn decision (thresholds TBD
     # from accumulated data). Recorded for QC aggregation across sessions.
     lq = dri.mean_landscape_quality(mean_norm_mi_list)
+    # Low-freq background correlation between this plane and its partner (cell-suppressed).
+    # Flags where the shared-vasculature-shadow assumption weakens (falls with pair depth).
+    try:
+        signal_emf_fn = output_dir / f"{oeid}_registered_episodic_mean_fov.h5"
+        with h5.File(signal_emf_fn, "r") as f:
+            sig_mean = f["data"][()].mean(axis=0)
+        with h5.File(paired_reg_emf_fn, "r") as f:
+            pai_mean = f["data"][()].mean(axis=0)
+        bg = dri.background_correlation(sig_mean, pai_mean)
+    except Exception as exc:  # noqa: BLE001
+        logging.warning(f"background correlation failed for {oeid}: {exc}")
+        bg = {"bg_corr": float("nan"), "bg_corr_gauss": float("nan"), "n_blocks": 0}
     metadata = {
         "alpha_mean": round(float(alpha), 2),
         "beta_mean": round(float(beta), 2),
         "paired_emf": str(paired_reg_emf_fn),
         "landscape_quality": {k: round(v, 5) for k, v in lq.items()},
+        "background_correlation": {
+            k: (round(v, 5) if isinstance(v, float) else v) for k, v in bg.items()
+        },
     }
 
     # To reduce RAM usage, get/save the decrosstalk_data in chunks:
@@ -229,6 +244,9 @@ def apply_decrosstalk_movie(
                 # landscape-quality diagnostics (metric values only, no decision)
                 for _k, _v in lq.items():
                     f.attrs[f"landscape_{_k}"] = float(_v)
+                # background correlation (plane vs partner, low-freq / cell-suppressed)
+                for _k, _v in bg.items():
+                    f.attrs[f"background_{_k}"] = float(_v)
         else:
             with h5.File(decrosstalk_fn, "a") as f:
                 f["data"].resize(
