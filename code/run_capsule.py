@@ -215,6 +215,12 @@ def apply_decrosstalk_movie(
                 f.create_dataset("alpha_list", data=alpha_list)
                 f.create_dataset("beta_list", data=beta_list)
                 f.create_dataset("mean_norm_mi_list", data=mean_norm_mi_list)
+                # Coefficients actually applied to this movie (may be reciprocity-
+                # averaged, so NOT necessarily mean(alpha_list)/mean(beta_list)). Stored
+                # unrounded so the corrected movie is self-describing; the rounded copy
+                # also lives in {oeid}_decrosstalk_data_process.json.
+                f.attrs["applied_alpha"] = float(alpha)
+                f.attrs["applied_beta"] = float(beta)
         else:
             with h5.File(decrosstalk_fn, "a") as f:
                 f["data"].resize(
