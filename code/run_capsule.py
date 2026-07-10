@@ -244,6 +244,17 @@ def apply_decrosstalk_movie(
         start_time,
         dt.now(),
     )
+    # One-page landscape QC figure: per-epoch MI landscapes + stability across epochs.
+    # Non-critical (guarded) -- a plotting failure must not fail the decrosstalk run.
+    try:
+        dri.render_landscape_page(
+            mean_norm_mi_list, alpha_list, beta_list,
+            title=f"{oeid} decrosstalk landscapes  (applied a={alpha:.3f}, b={beta:.3f})",
+            applied=(float(alpha), float(beta)),
+            save=str(output_dir / f"{oeid}_decrosstalk_landscape.png"),
+        )
+    except Exception as exc:  # noqa: BLE001
+        logging.warning(f"landscape QC page failed for {oeid}: {exc}")
     return decrosstalk_fn
 
 
