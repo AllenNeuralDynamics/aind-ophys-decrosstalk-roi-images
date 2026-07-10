@@ -83,7 +83,7 @@ def decrosstalk_roi_image_from_episodic_mean_fov(
     input_dir: Path,
     pixel_size: float = 0.78,
     grid_interval: float = 0.01,
-    max_grid_val: float = 0.3,
+    max_grid_val: float = 0.36,
     return_recon: float = False,
 ) -> Tuple[np.array, list, list, list]:
     """Get alpha and beta values for an experiment based on
@@ -169,6 +169,88 @@ def decrosstalk_roi_image_from_episodic_mean_fov(
     return recon_signal_data, alpha_list, beta_list, mean_norm_mi_list
 
 
+def _mean_norm_mi(alpha, beta, data, shape, bb_yx_list, mi_raw):
+    """Mean (over ROI boxes) normalized MI between unmixed signal/paired, for one
+    (alpha, beta). Uses precomputed box pixel indices `bb_yx_list` and per-box raw MI
+    `mi_raw` for normalization."""
+    temp_unmixing = np.linalg.inv([[1 - alpha, beta], [alpha, 1 - beta]])
+    rec = np.dot(temp_unmixing, data)
+    rs = rec[0, :].reshape(shape)
+    rp = rec[1, :].reshape(shape)
+    temp_mi = np.array(
+        [skimage.metrics.normalized_mutual_information(rs[yx], rp[yx]) for yx in bb_yx_list]
+    )
+    return float((temp_mi / mi_raw).mean())
+
+
+def coarse_to_fine_grid_search(
+    signal_mean,
+    paired_mean,
+    bb_masks,
+    coarse_step: float = 0.04,
+    max_grid_val: float = 0.36,
+    grid_interval: float = 0.01,
+    fine_window: float = 0.05,
+):
+    """Find (alpha, beta) minimizing mean normalized MI across ROI boxes.
+
+    Two passes: a coarse grid (step `coarse_step`, 0..max_grid_val) locates the basin,
+    then a fine grid (step `grid_interval`, +/-`fine_window` around the coarse minimum,
+    clipped to [0, max_grid_val]) refines it. ~5x fewer evaluations than the full grid.
+    Verified to reproduce the full-resolution grid argmin within one grid step on
+    good/over/under/flat cases (session02 verify gate); index-caching (precomputed
+    `bb_yx_list`) is exact.
+
+    Returns (alpha, beta, grid_vals). `grid_vals` is a flattened (n x n) grid over
+    [0, max_grid_val] at `grid_interval` (n = max_grid_val/grid_interval + 1), filled at
+    the evaluated coarse AND fine (alpha, beta) points and NaN elsewhere -- so it retains
+    the fine (grid_interval) resolution around the minimum plus the coarse wide landscape,
+    with implicit regular-grid coordinates, without computing the full grid. NB shape
+    differs from the old full grid (now 37x37 over 0-0.36, sparse/NaN); reshape and use
+    nan-aware ops (e.g. np.nanargmin) downstream.
+    """
+    bb_yx_list = [np.where(mask) for mask in bb_masks]
+    mi_raw = np.array(
+        [
+            skimage.metrics.normalized_mutual_information(signal_mean[yx], paired_mean[yx])
+            for yx in bb_yx_list
+        ]
+    )
+    data = np.vstack((signal_mean.ravel(), paired_mean.ravel()))
+    shape = signal_mean.shape
+
+    def _grid(lo_a, hi_a, lo_b, hi_b, step):
+        av = np.arange(lo_a, hi_a + step, step)
+        av = av[av <= max_grid_val + 1e-9]
+        bv = np.arange(lo_b, hi_b + step, step)
+        bv = bv[bv <= max_grid_val + 1e-9]
+        vals, ab = [], []
+        for a in av:
+            for b in bv:
+                vals.append(_mean_norm_mi(a, b, data, shape, bb_yx_list, mi_raw))
+                ab.append([float(a), float(b)])
+        return vals, ab
+
+    coarse_vals, coarse_ab = _grid(0, max_grid_val, 0, max_grid_val, coarse_step)
+    a0, b0 = coarse_ab[int(np.argmin(coarse_vals))]
+    fine_vals, fine_ab = _grid(
+        max(0, a0 - fine_window), min(max_grid_val, a0 + fine_window),
+        max(0, b0 - fine_window), min(max_grid_val, b0 + fine_window),
+        grid_interval,
+    )
+    alpha, beta = fine_ab[int(np.argmin(fine_vals))]
+
+    # Assemble a sparse full-resolution landscape: an (n x n) grid over [0, max_grid_val]
+    # at `grid_interval`, filled at the evaluated coarse AND fine (alpha, beta) points and
+    # NaN elsewhere. Keeps implicit regular-grid coordinates while retaining fine (0.01)
+    # resolution around the minimum plus the coarse wide landscape.
+    n = int(round(max_grid_val / grid_interval)) + 1
+    grid_vals = np.full((n, n), np.nan)
+    for (a, b), v in list(zip(coarse_ab, coarse_vals)) + list(zip(fine_ab, fine_vals)):
+        grid_vals[int(round(a / grid_interval)), int(round(b / grid_interval))] = v
+    return alpha, beta, grid_vals.ravel()
+
+
 def decrosstalk_roi_image_single_pair_from_episodic_mean_fov(
     oeid: int,
     paired_reg_emf_fn: str,
@@ -177,7 +259,7 @@ def decrosstalk_roi_image_single_pair_from_episodic_mean_fov(
     pix_size: float,
     motion_buffer: int = 5,
     grid_interval: float = 0.01,
-    max_grid_val: float = 0.3,
+    max_grid_val: float = 0.36,
 ) -> Tuple[float, float, list]:
     """Get alpha and beta values for a single pair of mean images
     based on the mean normalized mutual information of the ROI images
@@ -244,42 +326,16 @@ def decrosstalk_roi_image_single_pair_from_episodic_mean_fov(
     signal_bb_masks = get_bounding_box(signal_top_masks)
     paired_bb_masks = get_bounding_box(paired_top_masks)
     bb_masks = np.concatenate([signal_bb_masks, paired_bb_masks])
-    # Precompute each ROI bounding box's pixel indices once (they are fixed for this
-    # epoch). The grid loop below reuses them instead of recomputing np.where(mask)
-    # per (alpha, beta) x box, which was redundant. Exact same result, ~3-8x faster.
-    bb_yx_list = [np.where(mask) for mask in bb_masks]
-
-    # Calculate raw mutual information for normalization
-    mi_raw = np.zeros(len(bb_masks))
-    for bi, bb_yx in enumerate(bb_yx_list):
-        mi_raw[bi] = skimage.metrics.normalized_mutual_information(
-            signal_mean[bb_yx], paired_mean[bb_yx]
-        )
-
-    # Grid search for alpha and beta using mean normalized mutual information across ROIs
-    data = np.vstack((signal_mean.ravel(), paired_mean.ravel()))
-
-    alpha_list = np.arange(0, max_grid_val + grid_interval, grid_interval)
-    beta_list = np.arange(0, max_grid_val + grid_interval, grid_interval)
-    ab_pair = []
-    mean_norm_mi_values = []
-    for alpha in alpha_list:
-        for beta in beta_list:
-            temp_mixing = np.array([[1 - alpha, beta], [alpha, 1 - beta]])
-            temp_unmixing = np.linalg.inv(temp_mixing)
-            temp_unmixed_data = np.dot(temp_unmixing, data)
-            temp_recon_signal = temp_unmixed_data[0, :].reshape(signal_mean.shape)
-            temp_recon_paired = temp_unmixed_data[1, :].reshape(signal_mean.shape)
-            temp_mi = np.zeros(len(bb_masks))
-            for bi, bb_yx in enumerate(bb_yx_list):
-                temp_mi[bi] = skimage.metrics.normalized_mutual_information(
-                    temp_recon_signal[bb_yx], temp_recon_paired[bb_yx]
-                )
-            norm_mi = temp_mi / mi_raw
-            mean_norm_mi_values.append(norm_mi.mean())
-            ab_pair.append([alpha, beta])
-
-    alpha, beta = ab_pair[np.argmin(mean_norm_mi_values)]
+    # Coarse-to-fine grid search for (alpha, beta) minimizing mean normalized MI across
+    # ROI boxes (see coarse_to_fine_grid_search). Reproduces the full-resolution grid
+    # argmin within one grid step (session02 verify gate) at ~5x fewer evaluations.
+    # NB: mean_norm_mi_values is now a sparse 37x37 grid (0..max_grid_val at grid_interval)
+    # -- fine resolution near the minimum, coarse elsewhere, NaN at unevaluated points --
+    # not the old dense 31x31 (0-0.30) grid; use nan-aware ops downstream.
+    alpha, beta, mean_norm_mi_values = coarse_to_fine_grid_search(
+        signal_mean, paired_mean, bb_masks,
+        max_grid_val=max_grid_val, grid_interval=grid_interval,
+    )
     return alpha, beta, np.array(mean_norm_mi_values).tolist()
 
 
