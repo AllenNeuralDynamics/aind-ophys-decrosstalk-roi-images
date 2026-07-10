@@ -251,6 +251,106 @@ def coarse_to_fine_grid_search(
     return alpha, beta, grid_vals.ravel()
 
 
+_LQ_KEYS = ("lam_min", "lam_max", "a_star", "b_star", "se_a", "se_b", "sigma", "depth", "snr")
+
+
+def _fit_basin_quadratic(av, bv, zv, depth):
+    """Fit z ~ c0 + c1 a + c2 b + c3 a^2 + c4 b^2 + c5 ab and return the landscape-quality
+    metric dict. `depth` (global basin depth) is passed in for cross-region consistency.
+    np.nan dict if degenerate / too few points."""
+    if len(zv) < 6:
+        return {k: np.nan for k in _LQ_KEYS}
+    X = np.column_stack([np.ones_like(av), av, bv, av ** 2, bv ** 2, av * bv])
+    coef, *_ = np.linalg.lstsq(X, zv, rcond=None)
+    resid = zv - X @ coef
+    sigma = float(np.sqrt((resid ** 2).sum() / max(len(zv) - 6, 1)))
+    _, c1, c2, c3, c4, c5 = coef
+    evals = np.linalg.eigvalsh(np.array([[2 * c3, c5], [c5, 2 * c4]]))
+    lam_min, lam_max = float(evals[0]), float(evals[1])
+
+    def _vertex(c):
+        cc1, cc2, cc3, cc4, cc5 = c
+        Hm = np.array([[2 * cc3, cc5], [cc5, 2 * cc4]])
+        try:
+            return -np.linalg.solve(Hm, np.array([cc1, cc2]))
+        except np.linalg.LinAlgError:
+            return np.array([np.nan, np.nan])
+
+    v = _vertex(coef[1:])
+    a_star, b_star = float(v[0]), float(v[1])
+    try:
+        cov5 = (sigma ** 2 * np.linalg.inv(X.T @ X))[1:, 1:]
+        eps, J, base = 1e-6, np.zeros((2, 5)), coef[1:].copy()
+        for k in range(5):
+            cp = base.copy(); cp[k] += eps
+            J[:, k] = (_vertex(cp) - _vertex(base)) / eps
+        cov_v = J @ cov5 @ J.T
+        se_a, se_b = float(np.sqrt(max(cov_v[0, 0], 0))), float(np.sqrt(max(cov_v[1, 1], 0)))
+    except np.linalg.LinAlgError:
+        se_a = se_b = np.nan
+    snr = depth / sigma if sigma > 0 else np.nan
+    return dict(lam_min=lam_min, lam_max=lam_max, a_star=a_star, b_star=b_star,
+                se_a=se_a, se_b=se_b, sigma=sigma, depth=depth, snr=snr)
+
+
+def landscape_quality(mean_norm_mi_values, region="coarse", grid_interval=0.01,
+                      coarse_step=0.04, fine_window=0.05):
+    """Curvature / flatness / SNR of one epoch's MI objective basin, from a 2D quadratic
+    fit to either the COARSE or the FINE grid points.
+
+    `mean_norm_mi_values` is one epoch's flattened (n*n) objective grid (as stored in
+    mean_norm_mi_list), reshaped to (n, n) over [0, (n-1)*grid_interval]. Fits
+        z ~ c0 + c1 a + c2 b + c3 a^2 + c4 b^2 + c5 a b
+    on the selected region:
+      region="coarse": coarse lattice (every coarse_step/grid_interval-th point) -> GLOBAL
+      region="fine"  : points within +/-fine_window of the grid argmin (dense 0.01 block;
+                       the stored fine block in the sparse format) -> LOCAL basin
+    Returns metric VALUES only (lam_min/lam_max curvature, a_star/b_star vertex, se_a/se_b
+    propagated vertex SE, sigma fit residual, depth = 1-nanmin, snr = depth/sigma).
+    np.nan when degenerate. Kept identical to decrosstalk_qc.metrics.landscape_quality.
+    """
+    flat = np.asarray(mean_norm_mi_values, dtype=float).ravel()
+    n = int(round(len(flat) ** 0.5))
+    if n * n != len(flat):
+        return {k: np.nan for k in _LQ_KEYS}
+    G = flat.reshape(n, n)
+    ax_full = np.arange(n) * grid_interval
+    depth = 1.0 - float(np.nanmin(G))
+    if region == "coarse":
+        step = max(int(round(coarse_step / grid_interval)), 1)
+        idx = np.arange(0, n, step)
+        A, B = np.meshgrid(ax_full[idx], ax_full[idx], indexing="ij")
+        Z = G[np.ix_(idx, idx)]
+    elif region == "fine":
+        i0, j0 = np.unravel_index(int(np.nanargmin(G)), G.shape)
+        w = max(int(round(fine_window / grid_interval)), 1)
+        ii = np.arange(max(0, i0 - w), min(n, i0 + w + 1))
+        jj = np.arange(max(0, j0 - w), min(n, j0 + w + 1))
+        A, B = np.meshgrid(ax_full[ii], ax_full[jj], indexing="ij")
+        Z = G[np.ix_(ii, jj)]
+    else:
+        raise ValueError(f"region must be 'coarse' or 'fine', got {region!r}")
+    m = np.isfinite(Z)
+    if int(m.sum()) < 6:
+        return {k: np.nan for k in _LQ_KEYS}
+    return _fit_basin_quadratic(A[m], B[m], Z[m], depth)
+
+
+def mean_landscape_quality(mean_norm_mi_list, grid_interval=0.01, coarse_step=0.04,
+                           fine_window=0.05):
+    """Epoch-mean of landscape_quality over all epochs, for BOTH the coarse and fine fits.
+    Returns keys suffixed '_coarse' / '_fine' (nan-safe). Metric values only (no decision)."""
+    out = {}
+    for region in ("coarse", "fine"):
+        per = [landscape_quality(g, region=region, grid_interval=grid_interval,
+                                 coarse_step=coarse_step, fine_window=fine_window)
+               for g in mean_norm_mi_list]
+        for k in _LQ_KEYS:
+            vals = np.array([p[k] for p in per], dtype=float)
+            out[f"{k}_{region}"] = float(np.nanmean(vals)) if np.isfinite(vals).any() else float("nan")
+    return out
+
+
 def decrosstalk_roi_image_single_pair_from_episodic_mean_fov(
     oeid: int,
     paired_reg_emf_fn: str,

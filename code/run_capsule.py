@@ -170,10 +170,15 @@ def apply_decrosstalk_movie(
     paired_oeid_reg_to_oeid_full_fn = next(
         Path("../scratch").rglob(f"{paired_oeid}_registered_to_pair.h5")
     )
+    # Landscape-quality diagnostics (curvature / flatness / SNR) from the per-epoch MI
+    # grid, coarse-grid fit. METRIC VALUES ONLY -- no pass/warn decision (thresholds TBD
+    # from accumulated data). Recorded for QC aggregation across sessions.
+    lq = dri.mean_landscape_quality(mean_norm_mi_list)
     metadata = {
         "alpha_mean": round(float(alpha), 2),
         "beta_mean": round(float(beta), 2),
         "paired_emf": str(paired_reg_emf_fn),
+        "landscape_quality": {k: round(v, 5) for k, v in lq.items()},
     }
 
     # To reduce RAM usage, get/save the decrosstalk_data in chunks:
@@ -221,6 +226,9 @@ def apply_decrosstalk_movie(
                 # also lives in {oeid}_decrosstalk_data_process.json.
                 f.attrs["applied_alpha"] = float(alpha)
                 f.attrs["applied_beta"] = float(beta)
+                # landscape-quality diagnostics (metric values only, no decision)
+                for _k, _v in lq.items():
+                    f.attrs[f"landscape_{_k}"] = float(_v)
         else:
             with h5.File(decrosstalk_fn, "a") as f:
                 f["data"].resize(
