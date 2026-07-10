@@ -93,45 +93,46 @@ def write_qc_metrics(output_dir: Path, unique_id: str) -> None:
         json.dump(json.loads(metric.model_dump_json()), f, indent=4)
 
 
-def decrosstalk_roi_movie(
-    oeid: str, paired_oeid: str, input_dir: Path, output_dir: Path, start_time: dt
-) -> Path:
-    """
-    Run decrosstalk on roi movie
+def average_paired_coeffs(a1_list, b1_list, a2_list, b2_list):
+    """Reciprocity-average the two paired planes' epoch-mean (alpha, beta).
 
-    Parameters
-    ----------
-    oeid: str
-        ophys experiment id
-    paired_oeid: str
-        ophys experiment id of paired experiment
-    input_dir: Path
-        path to input data
-    output_dir: Path
-        path to output data
-    start_time: dt
-        start time of decrosstalk processing
+    A physical crosstalk leak is estimated twice. With mixing matrix
+    [[1-alpha, beta], [alpha, 1-beta]] (beta = leak INTO the signal plane, alpha = leak
+    OUT of it), for planes 1 and 2:
+        L(1->2) = alpha_1 = beta_2
+        L(2->1) = beta_1  = alpha_2
+    Averaging the two estimates of each leak yields one value per physical leak (enforcing
+    reciprocity), then assigns them, flipped, to each plane. Validated in session02
+    (residual_cv): free vs per-plane on held-out data (~ -0.0001 residual MI) with tighter
+    physical consistency.
+
+    Returns ((alpha1, beta1), (alpha2, beta2)) to apply to plane 1 and plane 2.
+    """
+    a1, b1 = float(np.mean(a1_list)), float(np.mean(b1_list))
+    a2, b2 = float(np.mean(a2_list)), float(np.mean(b2_list))
+    leak_1to2 = (a1 + b2) / 2.0
+    leak_2to1 = (b1 + a2) / 2.0
+    return (leak_1to2, leak_2to1), (leak_2to1, leak_1to2)
+
+
+def estimate_alpha_beta(
+    oeid: str, paired_oeid: str, input_dir: Path, output_dir: Path
+):
+    """Estimate per-epoch (alpha, beta) for one plane from the episodic-mean-FOV images.
+
+    No movie is reconstructed here; estimation is separated from application so paired
+    coefficients can be reciprocity-averaged before the (expensive) full-movie apply.
 
     Returns
     -------
-    decrosstalk_fn: Path
-        path to decrosstalk roi movie
+    (alpha_list, beta_list, mean_norm_mi_list, paired_reg_emf_fn)
     """
-    logging.info(f"Input directory, {input_dir}")
-    logging.info(f"Output directory, {output_dir}")
-    logging.info(f"Ophys experiment ID pairs, {oeid}, {paired_oeid}")
-    paired_oeid_reg_to_oeid_full_fn = next(
-        Path("../scratch").rglob(f"{paired_oeid}_registered_to_pair.h5")
-    )
+    logging.info(f"Estimating alpha/beta for {oeid} (paired {paired_oeid})")
     paired_reg_emf_fn = next(
-        (
-            output_dir.parent.parent.rglob(
-                f"{paired_oeid}_registered_to_pair_episodic_mean_fov.h5"
-            )
+        output_dir.parent.parent.rglob(
+            f"{paired_oeid}_registered_to_pair_episodic_mean_fov.h5"
         )
     )
-
-    # Just to get alpha and beta for the experiment using the episodic mean fov paired movie
     (
         _,
         alpha_list,
@@ -140,15 +141,42 @@ def decrosstalk_roi_movie(
     ) = dri.decrosstalk_roi_image_from_episodic_mean_fov(
         oeid, paired_reg_emf_fn, input_dir.parent
     )
-    alpha = np.mean(alpha_list)
-    beta = np.mean(beta_list)
+    return alpha_list, beta_list, mean_norm_mi_list, paired_reg_emf_fn
+
+
+def apply_decrosstalk_movie(
+    oeid: str,
+    paired_oeid: str,
+    input_dir: Path,
+    output_dir: Path,
+    alpha: float,
+    beta: float,
+    alpha_list: list,
+    beta_list: list,
+    mean_norm_mi_list: list,
+    paired_reg_emf_fn: Path,
+    start_time: dt,
+) -> Path:
+    """Apply the given (alpha, beta) mixing correction to the full registered movie in
+    chunks and write {oeid}_decrosstalk.h5.
+
+    `alpha`/`beta` are the coefficients actually applied (may be reciprocity-averaged);
+    they are recorded in the metadata (alpha_mean/beta_mean). The stored alpha_list /
+    beta_list / mean_norm_mi_list remain this plane's raw per-epoch estimates for QC.
+    """
+    logging.info(
+        f"Applying decrosstalk to {oeid}: alpha={alpha:.3f}, beta={beta:.3f}"
+    )
+    paired_oeid_reg_to_oeid_full_fn = next(
+        Path("../scratch").rglob(f"{paired_oeid}_registered_to_pair.h5")
+    )
     metadata = {
-        "alpha_mean": round(alpha, 2),
-        "beta_mean": round(beta, 2),
+        "alpha_mean": round(float(alpha), 2),
+        "beta_mean": round(float(beta), 2),
         "paired_emf": str(paired_reg_emf_fn),
     }
 
-    # To reduce RAM usage, you can get/save the decrosstalk_data in chunks:
+    # To reduce RAM usage, get/save the decrosstalk_data in chunks:
     chunk_size = 5000  # num of frames in each chunk
 
     with h5.File(input_dir / "motion_correction" / f"{oeid}_registered.h5", "r") as f:
@@ -159,7 +187,7 @@ def decrosstalk_roi_movie(
     assert end_frames[-1] == data_length
     decrosstalk_fn = output_dir / f"{oeid}_decrosstalk.h5"
 
-    # generate the decrosstalk movie with alpha and beta values calculated above
+    # generate the decrosstalk movie with the applied alpha and beta values
     # using the full paired registered movie
     chunk_no = 0
     for start_frame, end_frame in zip(start_frames, end_frames):
@@ -203,6 +231,56 @@ def decrosstalk_roi_movie(
         dt.now(),
     )
     return decrosstalk_fn
+
+
+def decrosstalk_roi_movie(
+    oeid: str, paired_oeid: str, input_dir: Path, output_dir: Path, start_time: dt
+) -> Path:
+    """
+    Run decrosstalk on roi movie (single-plane path: this plane's OWN epoch-mean
+    coefficients, no reciprocity averaging). Kept for backward compatibility; the
+    __main__ pair pipeline uses estimate_alpha_beta + average_paired_coeffs +
+    apply_decrosstalk_movie so paired coefficients are reciprocity-averaged.
+
+    Parameters
+    ----------
+    oeid: str
+        ophys experiment id
+    paired_oeid: str
+        ophys experiment id of paired experiment
+    input_dir: Path
+        path to input data
+    output_dir: Path
+        path to output data
+    start_time: dt
+        start time of decrosstalk processing
+
+    Returns
+    -------
+    decrosstalk_fn: Path
+        path to decrosstalk roi movie
+    """
+    logging.info(f"Input directory, {input_dir}")
+    logging.info(f"Output directory, {output_dir}")
+    logging.info(f"Ophys experiment ID pairs, {oeid}, {paired_oeid}")
+    alpha_list, beta_list, mean_norm_mi_list, paired_reg_emf_fn = estimate_alpha_beta(
+        oeid, paired_oeid, input_dir, output_dir
+    )
+    alpha = float(np.mean(alpha_list))
+    beta = float(np.mean(beta_list))
+    return apply_decrosstalk_movie(
+        oeid,
+        paired_oeid,
+        input_dir,
+        output_dir,
+        alpha,
+        beta,
+        alpha_list,
+        beta_list,
+        mean_norm_mi_list,
+        paired_reg_emf_fn,
+        start_time,
+    )
 
 
 def debug_movie(
@@ -500,10 +578,49 @@ if __name__ == "__main__":
     ppr.episodic_mean_fov(
         oeid2_reg_to_oeid1_motion_filepath, oeid2_output_dir, num_frames=num_frames
     )
+    # Self-registered episodic-mean-FOV images for both planes (input to estimation).
+    # (Previously created inside run_decrosstalk; hoisted here because reciprocity
+    # averaging needs both planes estimated before either is applied.)
+    ppr.episodic_mean_fov(
+        oeid1_input_dir / "motion_correction" / f"{oeid1}_registered.h5",
+        oeid1_output_dir,
+    )
+    ppr.episodic_mean_fov(
+        oeid2_input_dir / "motion_correction" / f"{oeid2}_registered.h5",
+        oeid2_output_dir,
+    )
+    # Estimate per-epoch (alpha, beta) for BOTH planes first, then reciprocity-average the
+    # paired coefficients (one physical leak -> one value), then apply to each full movie.
     start_time_oeid1 = dt.now()
-    run_decrosstalk(oeid1_input_dir, oeid1_output_dir, oeid1, oeid2, start_time_oeid1)
+    a1_list, b1_list, mi1_list, paired_emf1 = estimate_alpha_beta(
+        oeid1, oeid2, oeid1_input_dir, oeid1_output_dir
+    )
     start_time_oeid2 = dt.now()
-    run_decrosstalk(oeid2_input_dir, oeid2_output_dir, oeid2, oeid1, start_time_oeid2)
+    a2_list, b2_list, mi2_list, paired_emf2 = estimate_alpha_beta(
+        oeid2, oeid1, oeid2_input_dir, oeid2_output_dir
+    )
+    (alpha1, beta1), (alpha2, beta2) = average_paired_coeffs(
+        a1_list, b1_list, a2_list, b2_list
+    )
+    logging.info(
+        f"Reciprocity-averaged coeffs: {oeid1} (alpha={alpha1:.3f}, beta={beta1:.3f}), "
+        f"{oeid2} (alpha={alpha2:.3f}, beta={beta2:.3f})"
+    )
+    decrosstalk_fn1 = apply_decrosstalk_movie(
+        oeid1, oeid2, oeid1_input_dir, oeid1_output_dir, alpha1, beta1,
+        a1_list, b1_list, mi1_list, paired_emf1, start_time_oeid1,
+    )
+    decrosstalk_fn2 = apply_decrosstalk_movie(
+        oeid2, oeid1, oeid2_input_dir, oeid2_output_dir, alpha2, beta2,
+        a2_list, b2_list, mi2_list, paired_emf2, start_time_oeid2,
+    )
+    # Episodic-mean-FOV of the corrected movies (QC / downstream)
+    ppr.episodic_mean_fov(
+        decrosstalk_fn1, oeid1_output_dir, num_frames=num_frames, save_webm=True
+    )
+    ppr.episodic_mean_fov(
+        decrosstalk_fn2, oeid2_output_dir, num_frames=num_frames, save_webm=True
+    )
     (Path("../scratch/") / f"{oeid1}_registered_to_pair.h5").unlink()
     print("unlinking paired registered flies")
     (Path("../scratch/") / f"{oeid2}_registered_to_pair.h5").unlink()
