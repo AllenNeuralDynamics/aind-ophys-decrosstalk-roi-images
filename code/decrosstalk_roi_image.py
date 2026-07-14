@@ -415,35 +415,27 @@ def background_correlation(sig_mean, pai_mean, block=16, min_valid=0.3,
     }
 
 
-# Fixed axis caps for the landscape-quality panels so pages are comparable across sessions
-# at a glance (from the good+bad distribution over ~156 planes, ~p99 with headroom). Values
-# above a cap are drawn as a "^" marker on the top edge (off-scale). Kept identical to
-# decrosstalk_qc.plots.
-CURV_YMAX = 20.0   # Hessian eigenvalues; p99~17, max~24
-SNR_YMAX = 100.0   # basin SNR; p99~98, max~158
-SE_YMAX = 0.02     # vertex SE (flatness); p99 se_b~0.016, rare spikes up to ~4
-
-
-def _capped_plot(ax, x, y, ymax, fmt, color, label=None):
-    """Line plot with values capped at ymax; off-scale points marked '^' on the top edge."""
-    y = np.asarray(y, dtype=float)
-    ax.plot(x, np.minimum(y, ymax), fmt, color=color, label=label)
-    over = np.isfinite(y) & (y > ymax)
-    if over.any():
-        ax.plot(np.asarray(x)[over], np.full(int(over.sum()), ymax), "^", color=color,
-                ms=10, mec="k", mew=0.5, clip_on=False, zorder=6)
+COEF_MAX = 0.36     # fixed coefficient-value axis (grid max) -> figures comparable across sessions
+RECIP_FLAG = 0.05   # reciprocity-gap flag line (above the observed max ~0.043; tunable)
 
 
 def render_landscape_page(mean_norm_mi_list, alpha_list, beta_list, grid_interval=0.01,
-                          title="", applied=None, save=None):
-    """One-page landscape QC figure: per-epoch MI landscapes + stability across epochs.
+                          title="", applied=None, partner=None, coef_max=COEF_MAX,
+                          recip_flag=RECIP_FLAG, save=None):
+    """One-page landscape QC figure: per-epoch MI landscapes + coefficient stability + pair
+    symmetry (reciprocity).
 
-    `mean_norm_mi_list` is the list of per-epoch flattened (n*n) objective grids (as stored
-    in the decrosstalk h5). Top block: a grid of per-epoch heatmaps (shared color scale,
-    argmin marked). Bottom: (1) per-epoch argmins on the alpha-beta plane, (2) alpha & beta
-    vs epoch. `applied` = the (alpha, beta) actually applied (reciprocity-averaged), marked
-    distinctly. Kept identical to decrosstalk_qc.plots.render_landscape_page. Saves to
-    `save` (Agg) if given, else returns the figure.
+    Design (session02 bad_plane_analysis): landscape-shape metrics (curvature/flatness/SNR)
+    do NOT discriminate good vs bad and were dropped from the figure. This lean view catches
+    DRASTIC estimation failures only: a wandering/multi-modal minimum (landscapes), an
+    unstable coefficient (α/β stability), and a one-plane segmentation/registration
+    breakdown (pair symmetry: α_p≈β_q, β_p≈α_q).
+
+    `mean_norm_mi_list` = per-epoch flattened (n*n) objective grids (as stored in the h5).
+    `applied` = (alpha, beta) actually applied (reciprocity-averaged). `partner` =
+    (alpha_q_list, beta_q_list) of the partner plane; when given, adds the pair-symmetry row.
+    Coefficient-value axes are square and fixed to [0, coef_max]. Kept identical to
+    decrosstalk_qc.plots.render_landscape_page (ASCII labels for headless-font safety).
     """
     import math
     if save is not None:
@@ -457,117 +449,94 @@ def render_landscape_page(mean_norm_mi_list, alpha_list, beta_list, grid_interva
     grid = np.stack(grids)
     alpha, beta = np.asarray(alpha_list, float), np.asarray(beta_list, float)
     n, N = grid.shape[0], grid.shape[1]
-    gmax = (N - 1) * grid_interval
-    extent = [0, gmax, 0, gmax]
-    ax_vals = np.arange(N) * grid_interval
+    gm = (N - 1) * grid_interval
+    ep = np.arange(n)
     finite = grid[np.isfinite(grid)]
     vmin, vmax = (float(finite.min()), float(finite.max())) if finite.size else (0.0, 1.0)
+    ncols = math.ceil(n / 2)
+    has_partner = partner is not None
+    if has_partner:
+        aq, bq = np.asarray(partner[0], float), np.asarray(partner[1], float)
+        E = min(n, len(aq))
 
-    # per-epoch landscape-quality (fine = local basin, coarse = global bowl)
-    ep = np.arange(n)
-    pf = [landscape_quality(grid[e].ravel(), region="fine", grid_interval=grid_interval)
-          for e in range(n)]
-    pc = [landscape_quality(grid[e].ravel(), region="coarse", grid_interval=grid_interval)
-          for e in range(n)]
+    bot_rows = 2 if has_partner else 1
+    fig = plt.figure(figsize=(1.6 * ncols + 2.4, 4.0 + 2.5 * bot_rows), layout="constrained")
+    fig.suptitle(title, fontsize=11)
+    sf_land, sf_bot = fig.subfigures(2, 1, height_ratios=[1.5, 1.3 * bot_rows])
 
-    def qa(per, k):
-        return np.array([per[e][k] for e in range(n)], dtype=float)
-
-    ncols = min(n, 5)
-    nrows_land = math.ceil(n / ncols)
-    land_h, bot_h, title_h = nrows_land * 2.5, 5.2, 0.7
-    H = land_h + bot_h + title_h
-    fig = plt.figure(figsize=(max(ncols, 3) * 2.7, H))
-    f_land_top, f_land_bot = 1 - title_h / H, (bot_h + 0.4) / H
-    f_bot_top, f_bot_bot = (bot_h - 0.2) / H, 0.5 / H
-    gs_top = fig.add_gridspec(nrows_land, ncols, top=f_land_top, bottom=f_land_bot,
-                              left=0.06, right=0.89, hspace=0.5, wspace=0.32)
-    gs_bot = fig.add_gridspec(2, 3, top=f_bot_top, bottom=f_bot_bot,
-                              left=0.07, right=0.95, hspace=0.6, wspace=0.45)
-
+    # --- per-epoch landscapes: 2 rows x ncols, square panels ---
+    axl = sf_land.subplots(2, ncols, squeeze=False)
+    sf_land.suptitle("per-epoch MI landscapes (min = r+)", fontsize=9)
     im = None
-    for e in range(n):
-        ax = fig.add_subplot(gs_top[e // ncols, e % ncols])
-        im = ax.imshow(grid[e].T, origin="lower", extent=extent, vmin=vmin, vmax=vmax,
-                       aspect="auto", cmap="viridis")
-        if np.isfinite(grid[e]).any():
-            ai, bi = np.unravel_index(int(np.nanargmin(grid[e])), grid[e].shape)
-            ax.plot(ax_vals[ai], ax_vals[bi], "r+", ms=9, mew=1.6)
-        ax.set_title(f"ep{e}  a={alpha[e]:.2f} b={beta[e]:.2f}", fontsize=8)
-        ax.tick_params(labelsize=6)
-        if e % ncols == 0:
-            ax.set_ylabel("beta", fontsize=8)
-        if e // ncols == nrows_land - 1:
-            ax.set_xlabel("alpha", fontsize=8)
+    for e in range(2 * ncols):
+        ax = axl[e // ncols][e % ncols]
+        if e < n:
+            im = ax.imshow(grid[e].T, origin="lower", extent=[0, gm, 0, gm], vmin=vmin,
+                           vmax=vmax, cmap="viridis", aspect="auto")
+            if np.isfinite(grid[e]).any():
+                ai, bi = np.unravel_index(int(np.nanargmin(grid[e])), grid[e].shape)
+                ax.plot(ai * grid_interval, bi * grid_interval, "r+", ms=7)
+            ax.set_box_aspect(1)
+            ax.set_title(f"ep{e}", fontsize=7); ax.tick_params(labelsize=5)
+            if e % ncols == 0: ax.set_ylabel("beta", fontsize=7)
+            if e // ncols == 1 or n <= ncols: ax.set_xlabel("alpha", fontsize=7)
+        else:
+            ax.axis("off")
     if im is not None:
-        cax = fig.add_axes([0.905, f_land_bot + 0.02, 0.012, (f_land_top - f_land_bot) * 0.9])
-        fig.colorbar(im, cax=cax).set_label("norm. MI (basin = low)", fontsize=8)
+        sf_land.colorbar(im, ax=axl, shrink=0.7, pad=0.01, label="norm. MI (basin=low)")
 
-    # (0,0) per-epoch argmins on the alpha-beta plane
-    axs = fig.add_subplot(gs_bot[0, 0])
-    sc = axs.scatter(alpha, beta, c=ep, cmap="plasma", s=45,
-                     edgecolor="k", linewidth=0.4, zorder=3)
-    axs.scatter([alpha.mean()], [beta.mean()], marker="*", s=220, c="lime",
-                edgecolor="k", zorder=4, label="epoch mean")
+    axb = sf_bot.subplots(bot_rows, 2, squeeze=False)
+
+    # (0,0) argmin stability -- SQUARE, fixed axes, legend outside right
+    ax = axb[0][0]
+    ax.scatter(alpha, beta, c=ep, cmap="plasma", s=38, edgecolor="k", linewidth=0.3, zorder=3)
+    ax.scatter(alpha.mean(), beta.mean(), marker="*", s=180, c="lime", edgecolor="k",
+               zorder=4, label="epoch mean")
     if applied is not None:
-        axs.scatter([applied[0]], [applied[1]], marker="X", s=130, c="red",
-                    edgecolor="k", zorder=5, label="applied")
-    axs.set_xlabel("alpha*", fontsize=8); axs.set_ylabel("beta*", fontsize=8)
-    axs.set_xlim(0, gmax); axs.set_ylim(0, gmax)  # fixed range -> tight vs spread visible
-    axs.set_title(f"argmin stability (n={n})  sd_a={alpha.std():.3f} sd_b={beta.std():.3f}",
-                  fontsize=8)
-    axs.legend(fontsize=7, loc="best"); axs.grid(alpha=0.3)
-    cb = fig.colorbar(sc, ax=axs, fraction=0.046, pad=0.02); cb.set_label("epoch", fontsize=7)
+        ax.scatter([applied[0]], [applied[1]], marker="X", s=110, c="red", edgecolor="k",
+                   zorder=5, label="applied")
+    ax.set_xlim(0, coef_max); ax.set_ylim(0, coef_max); ax.set_box_aspect(1)
+    ax.set_xlabel("alpha*", fontsize=8); ax.set_ylabel("beta*", fontsize=8)
+    ax.set_title(f"argmin stability (sd_a={alpha.std():.3f}, sd_b={beta.std():.3f})", fontsize=8)
+    ax.grid(alpha=0.3); ax.tick_params(labelsize=7)
+    ax.legend(fontsize=7, loc="upper left", bbox_to_anchor=(1.02, 1.0), borderaxespad=0)
 
-    # (0,1) alpha & beta vs epoch
-    axl = fig.add_subplot(gs_bot[0, 1])
-    axl.plot(ep, alpha, "o-", color="C0", label="alpha*")
-    axl.plot(ep, beta, "s-", color="C1", label="beta*")
+    # (0,1) alpha/beta vs epoch -- y fixed to [0, coef_max], legend outside right
+    ax = axb[0][1]
+    ax.plot(ep, alpha, "o-", label="alpha*"); ax.plot(ep, beta, "s-", label="beta*")
     if applied is not None:
-        axl.axhline(applied[0], color="C0", ls="--", lw=1, alpha=0.7)
-        axl.axhline(applied[1], color="C1", ls="--", lw=1, alpha=0.7)
-    axl.set_xlabel("epoch", fontsize=8); axl.set_ylabel("coefficient", fontsize=8)
-    axl.set_ylim(0, gmax)
-    axl.set_title("coefficient vs epoch", fontsize=8)
-    axl.legend(fontsize=7); axl.grid(alpha=0.3)
+        ax.axhline(applied[0], color="C0", ls="--", lw=1, alpha=0.6)
+        ax.axhline(applied[1], color="C1", ls="--", lw=1, alpha=0.6)
+    ax.set_ylim(0, coef_max); ax.set_xlabel("epoch", fontsize=8); ax.set_ylabel("coefficient", fontsize=8)
+    ax.set_title("alpha / beta vs epoch", fontsize=8); ax.grid(alpha=0.3); ax.tick_params(labelsize=7)
+    ax.legend(fontsize=7, loc="upper left", bbox_to_anchor=(1.02, 1.0), borderaxespad=0)
 
-    # (0,2) basin curvature vs epoch (fine-fit Hessian eigenvalues)
-    axc = fig.add_subplot(gs_bot[0, 2])
-    _capped_plot(axc, ep, qa(pf, "lam_min"), CURV_YMAX, "o-", "C0", label="lam_min")
-    _capped_plot(axc, ep, qa(pf, "lam_max"), CURV_YMAX, "s-", "C3", label="lam_max")
-    axc.set_xlabel("epoch", fontsize=8); axc.set_ylabel(f"curvature (fine, <={CURV_YMAX:g})", fontsize=8)
-    axc.set_ylim(0, CURV_YMAX)
-    axc.set_title("basin curvature vs epoch", fontsize=8)
-    axc.legend(fontsize=7); axc.grid(alpha=0.3)
+    if has_partner:
+        # (1,0) pair symmetry scatter -- SQUARE: this plane (a_p,b_p) vs partner flipped (b_q,a_q)
+        ax = axb[1][0]
+        ax.scatter(alpha[:E], beta[:E], s=42, facecolor="none", edgecolor="C0", linewidth=1.4,
+                   label="this plane (a_p,b_p)")
+        ax.scatter(bq[:E], aq[:E], marker="x", s=42, c="C3", label="partner flipped (b_q,a_q)")
+        ax.plot([0, coef_max], [0, coef_max], "k:", linewidth=0.6)
+        ax.set_xlim(0, coef_max); ax.set_ylim(0, coef_max); ax.set_box_aspect(1)
+        ax.set_xlabel("a_p  (leak p->q)", fontsize=8); ax.set_ylabel("b_p  (leak q->p)", fontsize=8)
+        gap = 0.5 * (np.mean(np.abs(alpha[:E] - bq[:E])) + np.mean(np.abs(beta[:E] - aq[:E])))
+        ax.set_title(f"pair symmetry (recip gap={gap:.3f}, {'OK' if gap < recip_flag else 'FLAG'})", fontsize=8)
+        ax.grid(alpha=0.3); ax.tick_params(labelsize=7)
+        ax.legend(fontsize=6.5, loc="upper left", bbox_to_anchor=(1.02, 1.0), borderaxespad=0)
 
-    # (1,0) basin SNR vs epoch (fine)
-    axsn = fig.add_subplot(gs_bot[1, 0])
-    _capped_plot(axsn, ep, qa(pf, "snr"), SNR_YMAX, "o-", "C2")
-    axsn.set_xlabel("epoch", fontsize=8); axsn.set_ylabel(f"SNR (fine, <={SNR_YMAX:g})", fontsize=8)
-    axsn.set_ylim(0, SNR_YMAX)
-    axsn.set_title("basin SNR vs epoch", fontsize=8); axsn.grid(alpha=0.3)
+        # (1,1) reciprocity gap vs epoch, legend outside right
+        ax = axb[1][1]
+        ax.plot(ep[:E], np.abs(alpha[:E] - bq[:E]), "o-", label="|a_p - b_q|")
+        ax.plot(ep[:E], np.abs(beta[:E] - aq[:E]), "s-", label="|b_p - a_q|")
+        ax.axhline(recip_flag, color="r", ls="--", linewidth=1, label=f"{recip_flag:g} flag")
+        ax.set_ylim(0, max(recip_flag * 1.6, float(np.abs(beta[:E] - aq[:E]).max()) * 1.15))
+        ax.set_xlabel("epoch", fontsize=8); ax.set_ylabel("reciprocity gap", fontsize=8)
+        ax.set_title("reciprocity gap vs epoch", fontsize=8); ax.grid(alpha=0.3); ax.tick_params(labelsize=7)
+        ax.legend(fontsize=7, loc="upper left", bbox_to_anchor=(1.02, 1.0), borderaxespad=0)
 
-    # (1,1) flatness (vertex SE) vs epoch: alpha and beta (fine)
-    axf = fig.add_subplot(gs_bot[1, 1])
-    _capped_plot(axf, ep, qa(pf, "se_a"), SE_YMAX, "o-", "C0", label="alpha flatness (se_a)")
-    _capped_plot(axf, ep, qa(pf, "se_b"), SE_YMAX, "s-", "C1", label="beta flatness (se_b)")
-    axf.set_xlabel("epoch", fontsize=8); axf.set_ylabel(f"vertex SE (fine, <={SE_YMAX:g})", fontsize=8)
-    axf.set_ylim(0, SE_YMAX)
-    axf.set_title("flatness (alpha, beta) vs epoch  (^=off-scale)", fontsize=8)
-    axf.legend(fontsize=7); axf.grid(alpha=0.3)
-
-    # (1,2) epoch-mean quality summary (coarse / fine)
-    axt = fig.add_subplot(gs_bot[1, 2]); axt.axis("off")
-    lines = "epoch-mean quality\n%-9s %8s %8s\n" % ("", "coarse", "fine")
-    for k in ("lam_min", "lam_max", "se_a", "se_b", "snr"):
-        lines += "%-9s %8.4g %8.4g\n" % (k, np.nanmean(qa(pc, k)), np.nanmean(qa(pf, k)))
-    axt.text(0.0, 1.0, lines, family="monospace", fontsize=9, va="top",
-             transform=axt.transAxes)
-    axt.set_title("quality summary", fontsize=8)
-
-    fig.suptitle(title, fontsize=11, y=1 - 0.25 * title_h / H)
     if save is not None:
-        fig.savefig(save, dpi=110, bbox_inches="tight")
+        fig.savefig(save, dpi=100)
         plt.close(fig)
         return save
     return fig

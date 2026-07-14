@@ -156,6 +156,8 @@ def apply_decrosstalk_movie(
     mean_norm_mi_list: list,
     paired_reg_emf_fn: Path,
     start_time: dt,
+    partner_alpha_list: list = None,
+    partner_beta_list: list = None,
 ) -> Path:
     """Apply the given (alpha, beta) mixing correction to the full registered movie in
     chunks and write {oeid}_decrosstalk.h5.
@@ -163,6 +165,8 @@ def apply_decrosstalk_movie(
     `alpha`/`beta` are the coefficients actually applied (may be reciprocity-averaged);
     they are recorded in the metadata (alpha_mean/beta_mean). The stored alpha_list /
     beta_list / mean_norm_mi_list remain this plane's raw per-epoch estimates for QC.
+    `partner_alpha_list`/`partner_beta_list`, if given, add the pair-symmetry panel to the
+    landscape QC figure (reciprocity check).
     """
     logging.info(
         f"Applying decrosstalk to {oeid}: alpha={alpha:.3f}, beta={beta:.3f}"
@@ -262,13 +266,17 @@ def apply_decrosstalk_movie(
         start_time,
         dt.now(),
     )
-    # One-page landscape QC figure: per-epoch MI landscapes + stability across epochs.
+    # One-page landscape QC figure: per-epoch landscapes + coefficient stability + pair
+    # symmetry (if the partner's per-epoch coeffs are provided).
     # Non-critical (guarded) -- a plotting failure must not fail the decrosstalk run.
     try:
+        partner = None
+        if partner_alpha_list is not None and partner_beta_list is not None:
+            partner = (partner_alpha_list, partner_beta_list)
         dri.render_landscape_page(
             mean_norm_mi_list, alpha_list, beta_list,
             title=f"{oeid} decrosstalk landscapes  (applied a={alpha:.3f}, b={beta:.3f})",
-            applied=(float(alpha), float(beta)),
+            applied=(float(alpha), float(beta)), partner=partner,
             save=str(output_dir / f"{oeid}_decrosstalk_landscape.png"),
         )
     except Exception as exc:  # noqa: BLE001
@@ -652,10 +660,12 @@ if __name__ == "__main__":
     decrosstalk_fn1 = apply_decrosstalk_movie(
         oeid1, oeid2, oeid1_input_dir, oeid1_output_dir, alpha1, beta1,
         a1_list, b1_list, mi1_list, paired_emf1, start_time_oeid1,
+        partner_alpha_list=a2_list, partner_beta_list=b2_list,
     )
     decrosstalk_fn2 = apply_decrosstalk_movie(
         oeid2, oeid1, oeid2_input_dir, oeid2_output_dir, alpha2, beta2,
         a2_list, b2_list, mi2_list, paired_emf2, start_time_oeid2,
+        partner_alpha_list=a1_list, partner_beta_list=b1_list,
     )
     # Episodic-mean-FOV of the corrected movies (QC / downstream)
     ppr.episodic_mean_fov(
