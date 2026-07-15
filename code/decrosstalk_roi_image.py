@@ -1,3 +1,4 @@
+import json
 import warnings
 from pathlib import Path
 from typing import Tuple
@@ -540,6 +541,51 @@ def render_landscape_page(mean_norm_mi_list, alpha_list, beta_list, grid_interva
         plt.close(fig)
         return save
     return fig
+
+
+def _json_sanitize(x):
+    """Recursively convert a (possibly nested) array-like to plain Python types that
+    ``json.dump`` accepts: NumPy scalars/arrays -> native float/list, NaN -> null (JSON
+    has no NaN token; None round-trips to NaN via e.g. ``float(v) if v is not None else
+    float('nan')``)."""
+    if isinstance(x, (list, tuple, np.ndarray)):
+        return [_json_sanitize(v) for v in np.asarray(x, dtype=float).tolist()]
+    x = float(x)
+    return None if np.isnan(x) else x
+
+
+def save_qc_values(mean_norm_mi_list, alpha_list, beta_list, applied, oeid=None,
+                   paired_oeid=None, partner=None, grid_interval=0.01,
+                   coef_max=COEF_MAX, recip_flag=RECIP_FLAG, save=None):
+    """Save the exact values needed to reproduce this plane's QC figure
+    (:func:`render_landscape_page`) to a JSON file -- the plot's data, without the plot.
+
+    Parameters mirror ``render_landscape_page``; nothing here is derived/recomputed, it is
+    the same data passed to that function. NaN cells in ``mean_norm_mi_list`` (the sparse
+    coarse-to-fine grid's unevaluated points) are written as ``null``.
+
+    Returns the dict written (or returned, if ``save`` is None).
+    """
+    qc = {
+        "oeid": oeid,
+        "paired_oeid": paired_oeid,
+        "grid_interval": float(grid_interval),
+        "coef_max": float(coef_max),
+        "recip_flag": float(recip_flag),
+        "applied_alpha": float(applied[0]),
+        "applied_beta": float(applied[1]),
+        "alpha_list": _json_sanitize(alpha_list),
+        "beta_list": _json_sanitize(beta_list),
+        "mean_norm_mi_list": _json_sanitize(mean_norm_mi_list),
+    }
+    if partner is not None:
+        qc["partner_alpha_list"] = _json_sanitize(partner[0])
+        qc["partner_beta_list"] = _json_sanitize(partner[1])
+    if save is not None:
+        with open(save, "w") as f:
+            json.dump(qc, f)
+        return save
+    return qc
 
 
 def decrosstalk_roi_image_single_pair_from_episodic_mean_fov(

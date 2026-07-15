@@ -269,10 +269,10 @@ def apply_decrosstalk_movie(
     # One-page landscape QC figure: per-epoch landscapes + coefficient stability + pair
     # symmetry (if the partner's per-epoch coeffs are provided).
     # Non-critical (guarded) -- a plotting failure must not fail the decrosstalk run.
+    partner = None
+    if partner_alpha_list is not None and partner_beta_list is not None:
+        partner = (partner_alpha_list, partner_beta_list)
     try:
-        partner = None
-        if partner_alpha_list is not None and partner_beta_list is not None:
-            partner = (partner_alpha_list, partner_beta_list)
         dri.render_landscape_page(
             mean_norm_mi_list, alpha_list, beta_list,
             title=f"{oeid} decrosstalk landscapes  (applied a={alpha:.3f}, b={beta:.3f})",
@@ -281,6 +281,16 @@ def apply_decrosstalk_movie(
         )
     except Exception as exc:  # noqa: BLE001
         logging.warning(f"landscape QC page failed for {oeid}: {exc}")
+    # Same data as the figure above, as JSON (no plot) -- lets the QC figure be
+    # regenerated or re-styled downstream without re-reading the (large) decrosstalk h5.
+    try:
+        dri.save_qc_values(
+            mean_norm_mi_list, alpha_list, beta_list, applied=(float(alpha), float(beta)),
+            oeid=oeid, paired_oeid=paired_oeid, partner=partner,
+            save=str(output_dir / "qc-values.json"),
+        )
+    except Exception as exc:  # noqa: BLE001
+        logging.warning(f"qc-values.json failed for {oeid}: {exc}")
     return decrosstalk_fn
 
 
