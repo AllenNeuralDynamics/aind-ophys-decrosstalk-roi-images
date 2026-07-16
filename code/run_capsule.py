@@ -645,10 +645,12 @@ if __name__ == "__main__":
     ppr.episodic_mean_fov(
         oeid1_input_dir / "motion_correction" / f"{oeid1}_registered.h5",
         oeid1_output_dir,
+        num_frames=num_frames,
     )
     ppr.episodic_mean_fov(
         oeid2_input_dir / "motion_correction" / f"{oeid2}_registered.h5",
         oeid2_output_dir,
+        num_frames=num_frames,
     )
     # Estimate per-epoch (alpha, beta) for BOTH planes first, then reciprocity-average the
     # paired coefficients (one physical leak -> one value), then apply to each full movie.
