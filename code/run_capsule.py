@@ -116,7 +116,13 @@ def average_paired_coeffs(a1_list, b1_list, a2_list, b2_list):
 
 
 def estimate_alpha_beta(
-    oeid: str, paired_oeid: str, input_dir: Path, output_dir: Path
+    oeid: str,
+    paired_oeid: str,
+    input_dir: Path,
+    output_dir: Path,
+    grid_interval_fine: float = 0.01,
+    grid_interval_coarse: float = 0.04,
+    coef_max: float = 0.36,
 ):
     """Estimate per-epoch (alpha, beta) for one plane from the episodic-mean-FOV images.
 
@@ -125,7 +131,8 @@ def estimate_alpha_beta(
 
     Returns
     -------
-    (alpha_list, beta_list, mean_norm_mi_list, paired_reg_emf_fn)
+    (alpha_list, beta_list, mean_norm_mi_list, paired_reg_emf_fn, signal_bboxes_list,
+     paired_bboxes_list, example_signal_mean, example_paired_mean)
     """
     logging.info(f"Estimating alpha/beta for {oeid} (paired {paired_oeid})")
     paired_reg_emf_fn = next(
@@ -138,10 +145,28 @@ def estimate_alpha_beta(
         alpha_list,
         beta_list,
         mean_norm_mi_list,
+        signal_bboxes_list,
+        paired_bboxes_list,
+        example_signal_mean,
+        example_paired_mean,
     ) = dri.decrosstalk_roi_image_from_episodic_mean_fov(
-        oeid, paired_reg_emf_fn, input_dir.parent
+        oeid,
+        paired_reg_emf_fn,
+        input_dir.parent,
+        grid_interval_fine=grid_interval_fine,
+        grid_interval_coarse=grid_interval_coarse,
+        coef_max=coef_max,
     )
-    return alpha_list, beta_list, mean_norm_mi_list, paired_reg_emf_fn
+    return (
+        alpha_list,
+        beta_list,
+        mean_norm_mi_list,
+        paired_reg_emf_fn,
+        signal_bboxes_list,
+        paired_bboxes_list,
+        example_signal_mean,
+        example_paired_mean,
+    )
 
 
 def apply_decrosstalk_movie(
@@ -158,6 +183,14 @@ def apply_decrosstalk_movie(
     start_time: dt,
     partner_alpha_list: list = None,
     partner_beta_list: list = None,
+    grid_interval_fine: float = 0.01,
+    grid_interval_coarse: float = 0.04,
+    coef_max: float = 0.36,
+    recip_flag: float = 0.05,
+    signal_bboxes_list: list = None,
+    paired_bboxes_list: list = None,
+    example_signal_mean: np.ndarray = None,
+    example_paired_mean: np.ndarray = None,
 ) -> Path:
     """Apply the given (alpha, beta) mixing correction to the full registered movie in
     chunks and write {oeid}_decrosstalk.h5.
@@ -166,7 +199,9 @@ def apply_decrosstalk_movie(
     they are recorded in the metadata (alpha_mean/beta_mean). The stored alpha_list /
     beta_list / mean_norm_mi_list remain this plane's raw per-epoch estimates for QC.
     `partner_alpha_list`/`partner_beta_list`, if given, add the pair-symmetry panel to the
-    landscape QC figure (reciprocity check).
+    landscape QC figure (reciprocity check). `signal_bboxes_list`/`paired_bboxes_list`/
+    `example_signal_mean`/`example_paired_mean`, if given, render an ROI-bounding-box QC
+    page and are stored alongside the other QC values.
     """
     logging.info(
         f"Applying decrosstalk to {oeid}: alpha={alpha:.3f}, beta={beta:.3f}"
@@ -177,27 +212,15 @@ def apply_decrosstalk_movie(
     # Landscape-quality diagnostics (curvature / flatness / SNR) from the per-epoch MI
     # grid, coarse-grid fit. METRIC VALUES ONLY -- no pass/warn decision (thresholds TBD
     # from accumulated data). Recorded for QC aggregation across sessions.
-    lq = dri.mean_landscape_quality(mean_norm_mi_list)
-    # Low-freq background correlation between this plane and its partner (cell-suppressed).
-    # Flags where the shared-vasculature-shadow assumption weakens (falls with pair depth).
-    try:
-        signal_emf_fn = output_dir / f"{oeid}_registered_episodic_mean_fov.h5"
-        with h5.File(signal_emf_fn, "r") as f:
-            sig_mean = f["data"][()].mean(axis=0)
-        with h5.File(paired_reg_emf_fn, "r") as f:
-            pai_mean = f["data"][()].mean(axis=0)
-        bg = dri.background_correlation(sig_mean, pai_mean)
-    except Exception as exc:  # noqa: BLE001
-        logging.warning(f"background correlation failed for {oeid}: {exc}")
-        bg = {"bg_corr": float("nan"), "bg_corr_gauss": float("nan"), "n_blocks": 0}
+    lq = dri.mean_landscape_quality(
+        mean_norm_mi_list, grid_interval_fine=grid_interval_fine,
+        grid_interval_coarse=grid_interval_coarse,
+    )
     metadata = {
         "alpha_mean": round(float(alpha), 2),
         "beta_mean": round(float(beta), 2),
         "paired_emf": str(paired_reg_emf_fn),
         "landscape_quality": {k: round(v, 5) for k, v in lq.items()},
-        "background_correlation": {
-            k: (round(v, 5) if isinstance(v, float) else v) for k, v in bg.items()
-        },
     }
 
     # To reduce RAM usage, get/save the decrosstalk_data in chunks:
@@ -248,9 +271,6 @@ def apply_decrosstalk_movie(
                 # landscape-quality diagnostics (metric values only, no decision)
                 for _k, _v in lq.items():
                     f.attrs[f"landscape_{_k}"] = float(_v)
-                # background correlation (plane vs partner, low-freq / cell-suppressed)
-                for _k, _v in bg.items():
-                    f.attrs[f"background_{_k}"] = float(_v)
         else:
             with h5.File(decrosstalk_fn, "a") as f:
                 f["data"].resize(
@@ -277,71 +297,39 @@ def apply_decrosstalk_movie(
             mean_norm_mi_list, alpha_list, beta_list,
             title=f"{oeid} decrosstalk landscapes  (applied a={alpha:.3f}, b={beta:.3f})",
             applied=(float(alpha), float(beta)), partner=partner,
+            grid_interval_fine=grid_interval_fine, coef_max=coef_max,
+            recip_flag=recip_flag,
             save=str(output_dir / f"{oeid}_decrosstalk_landscape.png"),
         )
     except Exception as exc:  # noqa: BLE001
         logging.warning(f"landscape QC page failed for {oeid}: {exc}")
+    # One-page ROI-bounding-box QC figure: shows exactly which regions the estimator used
+    # (epoch 0), on both planes' cropped mean images. Non-critical (guarded).
+    try:
+        if example_signal_mean is not None and example_paired_mean is not None:
+            dri.render_roi_bbox_page(
+                example_signal_mean, example_paired_mean,
+                signal_bboxes_list[0] if signal_bboxes_list else [],
+                paired_bboxes_list[0] if paired_bboxes_list else [],
+                title=f"{oeid} ROI bounding boxes (epoch 0)",
+                save=str(output_dir / f"{oeid}_decrosstalk_roi_boxes.png"),
+            )
+    except Exception as exc:  # noqa: BLE001
+        logging.warning(f"ROI bbox QC page failed for {oeid}: {exc}")
     # Same data as the figure above, as JSON (no plot) -- lets the QC figure be
     # regenerated or re-styled downstream without re-reading the (large) decrosstalk h5.
     try:
         dri.save_qc_values(
             mean_norm_mi_list, alpha_list, beta_list, applied=(float(alpha), float(beta)),
             oeid=oeid, paired_oeid=paired_oeid, partner=partner,
+            grid_interval_fine=grid_interval_fine, grid_interval_coarse=grid_interval_coarse,
+            coef_max=coef_max, recip_flag=recip_flag,
+            signal_bboxes_list=signal_bboxes_list, paired_bboxes_list=paired_bboxes_list,
             save=str(output_dir / "qc-values.json"),
         )
     except Exception as exc:  # noqa: BLE001
         logging.warning(f"qc-values.json failed for {oeid}: {exc}")
     return decrosstalk_fn
-
-
-def decrosstalk_roi_movie(
-    oeid: str, paired_oeid: str, input_dir: Path, output_dir: Path, start_time: dt
-) -> Path:
-    """
-    Run decrosstalk on roi movie (single-plane path: this plane's OWN epoch-mean
-    coefficients, no reciprocity averaging). Kept for backward compatibility; the
-    __main__ pair pipeline uses estimate_alpha_beta + average_paired_coeffs +
-    apply_decrosstalk_movie so paired coefficients are reciprocity-averaged.
-
-    Parameters
-    ----------
-    oeid: str
-        ophys experiment id
-    paired_oeid: str
-        ophys experiment id of paired experiment
-    input_dir: Path
-        path to input data
-    output_dir: Path
-        path to output data
-    start_time: dt
-        start time of decrosstalk processing
-
-    Returns
-    -------
-    decrosstalk_fn: Path
-        path to decrosstalk roi movie
-    """
-    logging.info(f"Input directory, {input_dir}")
-    logging.info(f"Output directory, {output_dir}")
-    logging.info(f"Ophys experiment ID pairs, {oeid}, {paired_oeid}")
-    alpha_list, beta_list, mean_norm_mi_list, paired_reg_emf_fn = estimate_alpha_beta(
-        oeid, paired_oeid, input_dir, output_dir
-    )
-    alpha = float(np.mean(alpha_list))
-    beta = float(np.mean(beta_list))
-    return apply_decrosstalk_movie(
-        oeid,
-        paired_oeid,
-        input_dir,
-        output_dir,
-        alpha,
-        beta,
-        alpha_list,
-        beta_list,
-        mean_norm_mi_list,
-        paired_reg_emf_fn,
-        start_time,
-    )
 
 
 def debug_movie(
@@ -490,50 +478,6 @@ def check_non_rigid_registration(input_dir: Path) -> bool:
     return nonrigid
 
 
-def run_decrosstalk(
-    input_dir: Path,
-    output_dir: Path,
-    oeid: str,
-    paired_oeid: str,
-    start_time: dt,
-    num_frames: int = 1000,
-) -> None:
-    """Runs paired plane registration and decrosstalk for a given pair of experiments
-
-    Parameters
-    ----------
-    input_dir: Path
-        path to input data
-    output_dir: Path
-        path to output data
-    oeid: str
-        ophys experiment id
-    paired_oeid: str
-        ophys experiment id of paired experiment
-    start_time: dt
-        start time of decrosstalk processing
-    num_frames: int, optional
-        number of frames to process, default is 1000
-    """
-    logging.info("Running paired plane registration...")
-    # create cached registered to pair movie for each pair
-
-    # create the EMF of the registered to pair movie from cache
-
-    # create EMF of the self registered movies
-    ppr.episodic_mean_fov(
-        input_dir / "motion_correction" / f"{oeid}_registered.h5", output_dir
-    )
-    logging.info("Creating movie...")
-    # run decrosstalk
-    decrosstalk = decrosstalk_roi_movie(
-        oeid, paired_oeid, input_dir, output_dir, start_time
-    )
-    ppr.episodic_mean_fov(
-        decrosstalk, output_dir, num_frames=num_frames, save_webm=True
-    )
-
-
 def make_output_dirs(oeid: str, output_dir: Path) -> Path:
     """
     Make output directories for decrosstalk processing
@@ -592,6 +536,14 @@ if __name__ == "__main__":
         type=lambda x: x.lower() == "true",
         help="Enable debug mode (use --debug true or --debug false)",
     )
+    parser.add_argument("--grid-interval-fine", type=float, default=0.01,
+                        help="fine grid step for the coarse-to-fine (alpha,beta) search")
+    parser.add_argument("--grid-interval-coarse", type=float, default=0.04,
+                        help="coarse grid step for the coarse-to-fine (alpha,beta) search")
+    parser.add_argument("--coef-max", type=float, default=0.36,
+                        help="maximum alpha/beta value for the grid search and QC plot axes")
+    parser.add_argument("--recip-flag", type=float, default=0.05,
+                        help="reciprocity-gap threshold flagged in the QC figure")
 
     args = parser.parse_args()
     input_dir = Path("../data/").resolve()
@@ -640,8 +592,8 @@ if __name__ == "__main__":
         oeid2_reg_to_oeid1_motion_filepath, oeid2_output_dir, num_frames=num_frames
     )
     # Self-registered episodic-mean-FOV images for both planes (input to estimation).
-    # (Previously created inside run_decrosstalk; hoisted here because reciprocity
-    # averaging needs both planes estimated before either is applied.)
+    # Hoisted here (rather than inline with estimation) because reciprocity averaging
+    # needs both planes estimated before either is applied.
     ppr.episodic_mean_fov(
         oeid1_input_dir / "motion_correction" / f"{oeid1}_registered.h5",
         oeid1_output_dir,
@@ -653,12 +605,24 @@ if __name__ == "__main__":
     # Estimate per-epoch (alpha, beta) for BOTH planes first, then reciprocity-average the
     # paired coefficients (one physical leak -> one value), then apply to each full movie.
     start_time_oeid1 = dt.now()
-    a1_list, b1_list, mi1_list, paired_emf1 = estimate_alpha_beta(
-        oeid1, oeid2, oeid1_input_dir, oeid1_output_dir
+    (
+        a1_list, b1_list, mi1_list, paired_emf1,
+        signal_bboxes1, paired_bboxes1, example_signal_mean1, example_paired_mean1,
+    ) = estimate_alpha_beta(
+        oeid1, oeid2, oeid1_input_dir, oeid1_output_dir,
+        grid_interval_fine=args.grid_interval_fine,
+        grid_interval_coarse=args.grid_interval_coarse,
+        coef_max=args.coef_max,
     )
     start_time_oeid2 = dt.now()
-    a2_list, b2_list, mi2_list, paired_emf2 = estimate_alpha_beta(
-        oeid2, oeid1, oeid2_input_dir, oeid2_output_dir
+    (
+        a2_list, b2_list, mi2_list, paired_emf2,
+        signal_bboxes2, paired_bboxes2, example_signal_mean2, example_paired_mean2,
+    ) = estimate_alpha_beta(
+        oeid2, oeid1, oeid2_input_dir, oeid2_output_dir,
+        grid_interval_fine=args.grid_interval_fine,
+        grid_interval_coarse=args.grid_interval_coarse,
+        coef_max=args.coef_max,
     )
     (alpha1, beta1), (alpha2, beta2) = average_paired_coeffs(
         a1_list, b1_list, a2_list, b2_list
@@ -671,11 +635,21 @@ if __name__ == "__main__":
         oeid1, oeid2, oeid1_input_dir, oeid1_output_dir, alpha1, beta1,
         a1_list, b1_list, mi1_list, paired_emf1, start_time_oeid1,
         partner_alpha_list=a2_list, partner_beta_list=b2_list,
+        grid_interval_fine=args.grid_interval_fine,
+        grid_interval_coarse=args.grid_interval_coarse,
+        coef_max=args.coef_max, recip_flag=args.recip_flag,
+        signal_bboxes_list=signal_bboxes1, paired_bboxes_list=paired_bboxes1,
+        example_signal_mean=example_signal_mean1, example_paired_mean=example_paired_mean1,
     )
     decrosstalk_fn2 = apply_decrosstalk_movie(
         oeid2, oeid1, oeid2_input_dir, oeid2_output_dir, alpha2, beta2,
         a2_list, b2_list, mi2_list, paired_emf2, start_time_oeid2,
         partner_alpha_list=a1_list, partner_beta_list=b1_list,
+        grid_interval_fine=args.grid_interval_fine,
+        grid_interval_coarse=args.grid_interval_coarse,
+        coef_max=args.coef_max, recip_flag=args.recip_flag,
+        signal_bboxes_list=signal_bboxes2, paired_bboxes_list=paired_bboxes2,
+        example_signal_mean=example_signal_mean2, example_paired_mean=example_paired_mean2,
     )
     # Episodic-mean-FOV of the corrected movies (QC / downstream)
     ppr.episodic_mean_fov(

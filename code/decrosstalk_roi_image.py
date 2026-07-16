@@ -1,10 +1,8 @@
 import json
-import warnings
 from pathlib import Path
 from typing import Tuple
 
 import h5py
-import matplotlib
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
@@ -84,10 +82,11 @@ def decrosstalk_roi_image_from_episodic_mean_fov(
     paired_reg_fn: Path,
     input_dir: Path,
     pixel_size: float = 0.78,
-    grid_interval: float = 0.01,
-    max_grid_val: float = 0.36,
+    grid_interval_fine: float = 0.01,
+    grid_interval_coarse: float = 0.04,
+    coef_max: float = 0.36,
     return_recon: float = False,
-) -> Tuple[np.array, list, list, list]:
+) -> Tuple[np.array, list, list, list, list, list, np.array, np.array]:
     """Get alpha and beta values for an experiment based on
     the mutual information of the ROI images from motion corrected episodic mean FOV images
 
@@ -103,10 +102,12 @@ def decrosstalk_roi_image_from_episodic_mean_fov(
         path to the input directory
     pixel_size: float, optional
         pixel size in um of imaging plane, (400pixelsx400pixels 512umx512um)
-    grid_interval : float, optional
-        interval of the grid, by default 0.01
-    max_grid_val : float, optional
-        maximum value of alpha and beta, by default 0.3
+    grid_interval_fine : float, optional
+        fine grid step of the coarse-to-fine search, by default 0.01
+    grid_interval_coarse : float, optional
+        coarse grid step of the coarse-to-fine search, by default 0.04
+    coef_max : float, optional
+        maximum value of alpha and beta, by default 0.36
     return_recon : bool, optional
         whether to return the reconstructed signal and paired images, by default True
 
@@ -118,6 +119,14 @@ def decrosstalk_roi_image_from_episodic_mean_fov(
         list of beta values across epochs
     mean_norm_mi_list : list
         list of mean normalized mutual information values across epochs
+    signal_bboxes_list : list
+        per-epoch list of signal-plane ROI bounding boxes (see ``_bbox_coords``)
+    paired_bboxes_list : list
+        per-epoch list of paired-plane ROI bounding boxes (see ``_bbox_coords``)
+    example_signal_mean : np.array
+        cropped signal-plane mean image from epoch 0 (used for the MI grid search)
+    example_paired_mean : np.array
+        cropped paired-plane mean image from epoch 0 (used for the MI grid search)
     """
 
     # Assign start frames for each epoch
@@ -135,23 +144,37 @@ def decrosstalk_roi_image_from_episodic_mean_fov(
     alpha_list = []
     beta_list = []
     mean_norm_mi_list = []
-    for start_frame in start_frames:
+    signal_bboxes_list = []
+    paired_bboxes_list = []
+    example_signal_mean = None
+    example_paired_mean = None
+    for epoch_idx, start_frame in enumerate(start_frames):
         (
             alpha,
             beta,
             mean_norm_mi_values,
+            signal_mean,
+            paired_mean,
+            signal_bboxes,
+            paired_bboxes,
         ) = decrosstalk_roi_image_single_pair_from_episodic_mean_fov(
             oeid,
             paired_reg_fn,
             input_dir,
             start_frame,
             pixel_size,
-            grid_interval=grid_interval,
-            max_grid_val=max_grid_val,
+            grid_interval_fine=grid_interval_fine,
+            grid_interval_coarse=grid_interval_coarse,
+            coef_max=coef_max,
         )
         alpha_list.append(alpha)
         beta_list.append(beta)
         mean_norm_mi_list.append(mean_norm_mi_values)
+        signal_bboxes_list.append(signal_bboxes)
+        paired_bboxes_list.append(paired_bboxes)
+        if epoch_idx == 0:
+            example_signal_mean = signal_mean
+            example_paired_mean = paired_mean
 
     alpha = np.mean(alpha_list)
     beta = np.mean(beta_list)
@@ -168,7 +191,16 @@ def decrosstalk_roi_image_from_episodic_mean_fov(
             )[0]
     else:
         recon_signal_data = None
-    return recon_signal_data, alpha_list, beta_list, mean_norm_mi_list
+    return (
+        recon_signal_data,
+        alpha_list,
+        beta_list,
+        mean_norm_mi_list,
+        signal_bboxes_list,
+        paired_bboxes_list,
+        example_signal_mean,
+        example_paired_mean,
+    )
 
 
 def _mean_norm_mi(alpha, beta, data, shape, bb_yx_list, mi_raw):
@@ -189,27 +221,27 @@ def coarse_to_fine_grid_search(
     signal_mean,
     paired_mean,
     bb_masks,
-    coarse_step: float = 0.04,
-    max_grid_val: float = 0.36,
-    grid_interval: float = 0.01,
+    grid_interval_coarse: float = 0.04,
+    coef_max: float = 0.36,
+    grid_interval_fine: float = 0.01,
     fine_window: float = 0.05,
 ):
     """Find (alpha, beta) minimizing mean normalized MI across ROI boxes.
 
-    Two passes: a coarse grid (step `coarse_step`, 0..max_grid_val) locates the basin,
-    then a fine grid (step `grid_interval`, +/-`fine_window` around the coarse minimum,
-    clipped to [0, max_grid_val]) refines it. ~5x fewer evaluations than the full grid.
-    Verified to reproduce the full-resolution grid argmin within one grid step on
-    good/over/under/flat cases (session02 verify gate); index-caching (precomputed
+    Two passes: a coarse grid (step `grid_interval_coarse`, 0..coef_max) locates the
+    basin, then a fine grid (step `grid_interval_fine`, +/-`fine_window` around the
+    coarse minimum, clipped to [0, coef_max]) refines it. ~5x fewer evaluations than the
+    full grid. Verified to reproduce the full-resolution grid argmin within one grid step
+    on good/over/under/flat cases (session02 verify gate); index-caching (precomputed
     `bb_yx_list`) is exact.
 
     Returns (alpha, beta, grid_vals). `grid_vals` is a flattened (n x n) grid over
-    [0, max_grid_val] at `grid_interval` (n = max_grid_val/grid_interval + 1), filled at
+    [0, coef_max] at `grid_interval_fine` (n = coef_max/grid_interval_fine + 1), filled at
     the evaluated coarse AND fine (alpha, beta) points and NaN elsewhere -- so it retains
-    the fine (grid_interval) resolution around the minimum plus the coarse wide landscape,
-    with implicit regular-grid coordinates, without computing the full grid. NB shape
-    differs from the old full grid (now 37x37 over 0-0.36, sparse/NaN); reshape and use
-    nan-aware ops (e.g. np.nanargmin) downstream.
+    the fine (grid_interval_fine) resolution around the minimum plus the coarse wide
+    landscape, with implicit regular-grid coordinates, without computing the full grid. NB
+    shape differs from the old full grid (now 37x37 over 0-0.36, sparse/NaN); reshape and
+    use nan-aware ops (e.g. np.nanargmin) downstream.
     """
     bb_yx_list = [np.where(mask) for mask in bb_masks]
     mi_raw = np.array(
@@ -223,9 +255,9 @@ def coarse_to_fine_grid_search(
 
     def _grid(lo_a, hi_a, lo_b, hi_b, step):
         av = np.arange(lo_a, hi_a + step, step)
-        av = av[av <= max_grid_val + 1e-9]
+        av = av[av <= coef_max + 1e-9]
         bv = np.arange(lo_b, hi_b + step, step)
-        bv = bv[bv <= max_grid_val + 1e-9]
+        bv = bv[bv <= coef_max + 1e-9]
         vals, ab = [], []
         for a in av:
             for b in bv:
@@ -233,23 +265,23 @@ def coarse_to_fine_grid_search(
                 ab.append([float(a), float(b)])
         return vals, ab
 
-    coarse_vals, coarse_ab = _grid(0, max_grid_val, 0, max_grid_val, coarse_step)
+    coarse_vals, coarse_ab = _grid(0, coef_max, 0, coef_max, grid_interval_coarse)
     a0, b0 = coarse_ab[int(np.argmin(coarse_vals))]
     fine_vals, fine_ab = _grid(
-        max(0, a0 - fine_window), min(max_grid_val, a0 + fine_window),
-        max(0, b0 - fine_window), min(max_grid_val, b0 + fine_window),
-        grid_interval,
+        max(0, a0 - fine_window), min(coef_max, a0 + fine_window),
+        max(0, b0 - fine_window), min(coef_max, b0 + fine_window),
+        grid_interval_fine,
     )
     alpha, beta = fine_ab[int(np.argmin(fine_vals))]
 
-    # Assemble a sparse full-resolution landscape: an (n x n) grid over [0, max_grid_val]
-    # at `grid_interval`, filled at the evaluated coarse AND fine (alpha, beta) points and
-    # NaN elsewhere. Keeps implicit regular-grid coordinates while retaining fine (0.01)
-    # resolution around the minimum plus the coarse wide landscape.
-    n = int(round(max_grid_val / grid_interval)) + 1
+    # Assemble a sparse full-resolution landscape: an (n x n) grid over [0, coef_max]
+    # at `grid_interval_fine`, filled at the evaluated coarse AND fine (alpha, beta) points
+    # and NaN elsewhere. Keeps implicit regular-grid coordinates while retaining fine
+    # (0.01) resolution around the minimum plus the coarse wide landscape.
+    n = int(round(coef_max / grid_interval_fine)) + 1
     grid_vals = np.full((n, n), np.nan)
     for (a, b), v in list(zip(coarse_ab, coarse_vals)) + list(zip(fine_ab, fine_vals)):
-        grid_vals[int(round(a / grid_interval)), int(round(b / grid_interval))] = v
+        grid_vals[int(round(a / grid_interval_fine)), int(round(b / grid_interval_fine))] = v
     return alpha, beta, grid_vals.ravel()
 
 
@@ -295,16 +327,17 @@ def _fit_basin_quadratic(av, bv, zv, depth):
                 se_a=se_a, se_b=se_b, sigma=sigma, depth=depth, snr=snr)
 
 
-def landscape_quality(mean_norm_mi_values, region="coarse", grid_interval=0.01,
-                      coarse_step=0.04, fine_window=0.05):
+def landscape_quality(mean_norm_mi_values, region="coarse", grid_interval_fine=0.01,
+                      grid_interval_coarse=0.04, fine_window=0.05):
     """Curvature / flatness / SNR of one epoch's MI objective basin, from a 2D quadratic
     fit to either the COARSE or the FINE grid points.
 
     `mean_norm_mi_values` is one epoch's flattened (n*n) objective grid (as stored in
-    mean_norm_mi_list), reshaped to (n, n) over [0, (n-1)*grid_interval]. Fits
+    mean_norm_mi_list), reshaped to (n, n) over [0, (n-1)*grid_interval_fine]. Fits
         z ~ c0 + c1 a + c2 b + c3 a^2 + c4 b^2 + c5 a b
     on the selected region:
-      region="coarse": coarse lattice (every coarse_step/grid_interval-th point) -> GLOBAL
+      region="coarse": coarse lattice (every grid_interval_coarse/grid_interval_fine-th
+                       point) -> GLOBAL
       region="fine"  : points within +/-fine_window of the grid argmin (dense 0.01 block;
                        the stored fine block in the sparse format) -> LOCAL basin
     Returns metric VALUES only (lam_min/lam_max curvature, a_star/b_star vertex, se_a/se_b
@@ -316,16 +349,16 @@ def landscape_quality(mean_norm_mi_values, region="coarse", grid_interval=0.01,
     if n * n != len(flat):
         return {k: np.nan for k in _LQ_KEYS}
     G = flat.reshape(n, n)
-    ax_full = np.arange(n) * grid_interval
+    ax_full = np.arange(n) * grid_interval_fine
     depth = 1.0 - float(np.nanmin(G))
     if region == "coarse":
-        step = max(int(round(coarse_step / grid_interval)), 1)
+        step = max(int(round(grid_interval_coarse / grid_interval_fine)), 1)
         idx = np.arange(0, n, step)
         A, B = np.meshgrid(ax_full[idx], ax_full[idx], indexing="ij")
         Z = G[np.ix_(idx, idx)]
     elif region == "fine":
         i0, j0 = np.unravel_index(int(np.nanargmin(G)), G.shape)
-        w = max(int(round(fine_window / grid_interval)), 1)
+        w = max(int(round(fine_window / grid_interval_fine)), 1)
         ii = np.arange(max(0, i0 - w), min(n, i0 + w + 1))
         jj = np.arange(max(0, j0 - w), min(n, j0 + w + 1))
         A, B = np.meshgrid(ax_full[ii], ax_full[jj], indexing="ij")
@@ -338,14 +371,15 @@ def landscape_quality(mean_norm_mi_values, region="coarse", grid_interval=0.01,
     return _fit_basin_quadratic(A[m], B[m], Z[m], depth)
 
 
-def mean_landscape_quality(mean_norm_mi_list, grid_interval=0.01, coarse_step=0.04,
-                           fine_window=0.05):
+def mean_landscape_quality(mean_norm_mi_list, grid_interval_fine=0.01,
+                           grid_interval_coarse=0.04, fine_window=0.05):
     """Epoch-mean of landscape_quality over all epochs, for BOTH the coarse and fine fits.
     Returns keys suffixed '_coarse' / '_fine' (nan-safe). Metric values only (no decision)."""
     out = {}
     for region in ("coarse", "fine"):
-        per = [landscape_quality(g, region=region, grid_interval=grid_interval,
-                                 coarse_step=coarse_step, fine_window=fine_window)
+        per = [landscape_quality(g, region=region, grid_interval_fine=grid_interval_fine,
+                                 grid_interval_coarse=grid_interval_coarse,
+                                 fine_window=fine_window)
                for g in mean_norm_mi_list]
         for k in _LQ_KEYS:
             vals = np.array([p[k] for p in per], dtype=float)
@@ -353,74 +387,11 @@ def mean_landscape_quality(mean_norm_mi_list, grid_interval=0.01, coarse_step=0.
     return out
 
 
-def _cell_mask(img, dilate=2):
-    """Boolean mask of cell footprints from basic_segmentation, with holes filled (so the
-    dim nucleus inside a detected cell rim is included, not left as a low-value pixel) and
-    a small dilation for a margin. Used to EXCLUDE cells before estimating background."""
-    m = basic_segmentation(img) > 0
-    m = ndimage.binary_fill_holes(m)
-    if dilate:
-        m = ndimage.binary_dilation(m, iterations=dilate)
-    return m
-
-
-def background_correlation(sig_mean, pai_mean, block=16, min_valid=0.3,
-                           gauss_sigma=30, dilate=2):
-    """Low-frequency background correlation between a plane and its paired plane (both
-    full-session mean FOVs, same registration frame), with CELLS REMOVED.
-
-    The MI model assumes the vasculature-shadow / illumination background is shared between
-    the two planes; for far-apart (deep) pairs this can break. Background is estimated after
-    masking out segmented cells (basic_segmentation, holes filled so dim nuclei are excluded
-    too, dilated) in EITHER plane, then the two planes are correlated:
-      - ``bg_corr``       : per-block MEDIAN of the non-cell pixels (neuropil/vasculature
-                            background). Primary metric.
-      - ``bg_corr_gauss`` : naive heavy-Gaussian low-pass, no cell removal (reference).
-    Invalid (<=0, warped-border) pixels also masked; blocks below min_valid valid fraction
-    dropped (no motion crop needed). bg_corr ~1 = shared background (assumption holds),
-    lower = patterns differ. Falls monotonically with pair separation (0-1 ~0.77 ->
-    6-7 ~0.43). Identical to decrosstalk_qc.metrics.background_correlation.
-
-    Returns dict(bg_corr, bg_corr_gauss, n_blocks).
-    """
-    s = np.asarray(sig_mean, dtype=float)
-    p = np.asarray(pai_mean, dtype=float)
-    H, W = s.shape
-    h, w = (H // block) * block, (W // block) * block
-    s, p = s[:h, :w], p[:h, :w]
-    infov = np.isfinite(s) & np.isfinite(p) & (s > 0) & (p > 0)
-    cells = _cell_mask(s, dilate) | _cell_mask(p, dilate)  # cell in either plane
-    valid = infov & ~cells
-    nb = (h // block, w // block)
-    frac = valid.reshape(nb[0], block, nb[1], block).mean(axis=(1, 3))
-    goodblk = frac >= min_valid
-
-    def _coarse_median(img):
-        a = np.where(valid, img, np.nan).reshape(nb[0], block, nb[1], block)
-        with warnings.catch_warnings():
-            warnings.simplefilter("ignore")
-            return np.nanmedian(a, axis=(1, 3))
-
-    def _coarse_gauss(img):
-        g = ndimage.gaussian_filter(np.where(infov, img, 0.0), gauss_sigma)
-        return g.reshape(nb[0], block, nb[1], block).mean(axis=(1, 3))
-
-    def _corr(x, y):
-        m = goodblk & np.isfinite(x) & np.isfinite(y)
-        return float(np.corrcoef(x[m], y[m])[0, 1]) if int(m.sum()) >= 10 else float("nan")
-
-    return {
-        "bg_corr": _corr(_coarse_median(s), _coarse_median(p)),
-        "bg_corr_gauss": _corr(_coarse_gauss(s), _coarse_gauss(p)),
-        "n_blocks": int(goodblk.sum()),
-    }
-
-
 COEF_MAX = 0.36     # fixed coefficient-value axis (grid max) -> figures comparable across sessions
 RECIP_FLAG = 0.05   # reciprocity-gap flag line (above the observed max ~0.043; tunable)
 
 
-def render_landscape_page(mean_norm_mi_list, alpha_list, beta_list, grid_interval=0.01,
+def render_landscape_page(mean_norm_mi_list, alpha_list, beta_list, grid_interval_fine=0.01,
                           title="", applied=None, partner=None, coef_max=COEF_MAX,
                           recip_flag=RECIP_FLAG, save=None):
     """One-page landscape QC figure: per-epoch MI landscapes + coefficient stability + pair
@@ -450,7 +421,7 @@ def render_landscape_page(mean_norm_mi_list, alpha_list, beta_list, grid_interva
     grid = np.stack(grids)
     alpha, beta = np.asarray(alpha_list, float), np.asarray(beta_list, float)
     n, N = grid.shape[0], grid.shape[1]
-    gm = (N - 1) * grid_interval
+    gm = (N - 1) * grid_interval_fine
     ep = np.arange(n)
     finite = grid[np.isfinite(grid)]
     vmin, vmax = (float(finite.min()), float(finite.max())) if finite.size else (0.0, 1.0)
@@ -476,7 +447,7 @@ def render_landscape_page(mean_norm_mi_list, alpha_list, beta_list, grid_interva
                            vmax=vmax, cmap="viridis", aspect="auto")
             if np.isfinite(grid[e]).any():
                 ai, bi = np.unravel_index(int(np.nanargmin(grid[e])), grid[e].shape)
-                ax.plot(ai * grid_interval, bi * grid_interval, "r+", ms=7)
+                ax.plot(ai * grid_interval_fine, bi * grid_interval_fine, "r+", ms=7)
             ax.set_box_aspect(1)
             ax.set_title(f"ep{e}", fontsize=7); ax.tick_params(labelsize=5)
             if e % ncols == 0: ax.set_ylabel("beta", fontsize=7)
@@ -543,6 +514,47 @@ def render_landscape_page(mean_norm_mi_list, alpha_list, beta_list, grid_interva
     return fig
 
 
+def render_roi_bbox_page(signal_mean, paired_mean, signal_bboxes, paired_bboxes,
+                         title="", save=None):
+    """One-page QC figure: the two planes' cropped mean images (used for the MI grid
+    search), each overlaid with BOTH planes' ROI bounding boxes (signal boxes in one
+    color, paired-plane boxes in another) -- both images share the same pixel coordinate
+    frame (paired_mean is already registered into signal_mean's frame), so either box set
+    is valid to draw on either panel. Shows exactly which regions the estimator used.
+    Coordinates are in the CROPPED image's own pixel frame (see save_qc_values).
+    """
+    import matplotlib
+    if save is not None:
+        matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+    from matplotlib.patches import Rectangle
+
+    fig, axes = plt.subplots(1, 2, figsize=(9, 4.7))
+    for ax, img, panel_title in [(axes[0], signal_mean, "signal"), (axes[1], paired_mean, "paired")]:
+        lo, hi = np.percentile(img, [1, 99])
+        ax.imshow(img, cmap="gray", vmin=lo, vmax=hi, origin="upper", aspect="equal")
+        for boxes, color, label in [(signal_bboxes, "red", "signal ROI boxes"),
+                                    (paired_bboxes, "cyan", "paired ROI boxes")]:
+            for bi, b in enumerate(boxes):
+                x, y = b["top_left"]
+                rect = Rectangle((x, y), b["width"], b["height"], linewidth=1,
+                                 edgecolor=color, facecolor="none",
+                                 label=label if bi == 0 else None)
+                ax.add_patch(rect)
+        ax.set_title(panel_title, fontsize=10)
+        ax.axis("off")
+    handles, labels = axes[0].get_legend_handles_labels()
+    fig.legend(handles, labels, fontsize=8, loc="lower center", ncol=2,
+              bbox_to_anchor=(0.5, 0.0))
+    fig.suptitle(title, fontsize=11)
+    fig.tight_layout(rect=(0, 0.06, 1, 1))
+    if save is not None:
+        fig.savefig(save, dpi=100, bbox_inches="tight")
+        plt.close(fig)
+        return save
+    return fig
+
+
 def _json_sanitize(x):
     """Recursively convert a (possibly nested) array-like to plain Python types that
     ``json.dump`` accepts: NumPy scalars/arrays -> native float/list, NaN -> null (JSON
@@ -555,21 +567,31 @@ def _json_sanitize(x):
 
 
 def save_qc_values(mean_norm_mi_list, alpha_list, beta_list, applied, oeid=None,
-                   paired_oeid=None, partner=None, grid_interval=0.01,
-                   coef_max=COEF_MAX, recip_flag=RECIP_FLAG, save=None):
+                   paired_oeid=None, partner=None, grid_interval_fine=0.01,
+                   grid_interval_coarse=0.04, coef_max=COEF_MAX, recip_flag=RECIP_FLAG,
+                   save=None, signal_bboxes_list=None, paired_bboxes_list=None):
     """Save the exact values needed to reproduce this plane's QC figure
     (:func:`render_landscape_page`) to a JSON file -- the plot's data, without the plot.
 
     Parameters mirror ``render_landscape_page``; nothing here is derived/recomputed, it is
     the same data passed to that function. NaN cells in ``mean_norm_mi_list`` (the sparse
-    coarse-to-fine grid's unevaluated points) are written as ``null``.
+    coarse-to-fine grid's unevaluated points) are written as ``null``. ``grid_interval_fine``
+    is the resolution of the stored grid itself (needed to reshape/plot it);
+    ``grid_interval_coarse`` is recorded too even though the figure doesn't need it, purely
+    so the sparse coarse+fine structure (why most cells are null) is self-documenting from
+    the JSON alone, rather than only inferable from the NaN pattern.
+
+    signal_bboxes_list/paired_bboxes_list (if given): per-epoch list of ROI box dicts
+    {top_left:[x,y], width, height} in the cropped-image pixel frame (same crop for every
+    epoch of this oeid) -- lets the boxes be redrawn without re-running segmentation.
 
     Returns the dict written (or returned, if ``save`` is None).
     """
     qc = {
         "oeid": oeid,
         "paired_oeid": paired_oeid,
-        "grid_interval": float(grid_interval),
+        "grid_interval_fine": float(grid_interval_fine),
+        "grid_interval_coarse": float(grid_interval_coarse),
         "coef_max": float(coef_max),
         "recip_flag": float(recip_flag),
         "applied_alpha": float(applied[0]),
@@ -581,9 +603,13 @@ def save_qc_values(mean_norm_mi_list, alpha_list, beta_list, applied, oeid=None,
     if partner is not None:
         qc["partner_alpha_list"] = _json_sanitize(partner[0])
         qc["partner_beta_list"] = _json_sanitize(partner[1])
+    if signal_bboxes_list is not None:
+        qc["signal_bboxes_list"] = signal_bboxes_list
+    if paired_bboxes_list is not None:
+        qc["paired_bboxes_list"] = paired_bboxes_list
     if save is not None:
         with open(save, "w") as f:
-            json.dump(qc, f)
+            json.dump(qc, f, indent=2)
         return save
     return qc
 
@@ -595,9 +621,10 @@ def decrosstalk_roi_image_single_pair_from_episodic_mean_fov(
     start_frame: int,
     pix_size: float,
     motion_buffer: int = 5,
-    grid_interval: float = 0.01,
-    max_grid_val: float = 0.36,
-) -> Tuple[float, float, list]:
+    grid_interval_fine: float = 0.01,
+    grid_interval_coarse: float = 0.04,
+    coef_max: float = 0.36,
+) -> Tuple[float, float, list, np.array, np.array, list, list]:
     """Get alpha and beta values for a single pair of mean images
     based on the mean normalized mutual information of the ROI images
 
@@ -618,10 +645,12 @@ def decrosstalk_roi_image_single_pair_from_episodic_mean_fov(
     motion_buffer : int, optional
         number of pixels to crop from the nonrigid motion corrected image, by default 5
         TODO: Get this from the suite2p parameters
-    grid_interval : float, optional
-        interval of the grid, by default 0.01
-    max_grid_val : float, optional
-        maximum value of alpha and beta, by default 0.3
+    grid_interval_fine : float, optional
+        fine grid step of the coarse-to-fine search, by default 0.01
+    grid_interval_coarse : float, optional
+        coarse grid step of the coarse-to-fine search, by default 0.04
+    coef_max : float, optional
+        maximum value of alpha and beta, by default 0.36
 
     Returns:
     -----------
@@ -631,6 +660,14 @@ def decrosstalk_roi_image_single_pair_from_episodic_mean_fov(
         beta value of the unmixing matrix
     mean_norm_mi_values : np.array
         mean normalized mutual information values
+    signal_mean : np.array
+        cropped signal-plane mean image used for the MI grid search
+    paired_mean : np.array
+        cropped paired-plane mean image used for the MI grid search
+    signal_bboxes : list
+        signal-plane ROI bounding boxes (see ``_bbox_coords``)
+    paired_bboxes : list
+        paired-plane ROI bounding boxes (see ``_bbox_coords``)
     """
     signal_fn = (
         Path("../results")
@@ -662,18 +699,29 @@ def decrosstalk_roi_image_single_pair_from_episodic_mean_fov(
     # Create bounding boxes
     signal_bb_masks = get_bounding_box(signal_top_masks)
     paired_bb_masks = get_bounding_box(paired_top_masks)
+    signal_bboxes = _bbox_coords(signal_bb_masks)
+    paired_bboxes = _bbox_coords(paired_bb_masks)
     bb_masks = np.concatenate([signal_bb_masks, paired_bb_masks])
     # Coarse-to-fine grid search for (alpha, beta) minimizing mean normalized MI across
     # ROI boxes (see coarse_to_fine_grid_search). Reproduces the full-resolution grid
     # argmin within one grid step (session02 verify gate) at ~5x fewer evaluations.
-    # NB: mean_norm_mi_values is now a sparse 37x37 grid (0..max_grid_val at grid_interval)
+    # NB: mean_norm_mi_values is now a sparse 37x37 grid (0..coef_max at grid_interval_fine)
     # -- fine resolution near the minimum, coarse elsewhere, NaN at unevaluated points --
     # not the old dense 31x31 (0-0.30) grid; use nan-aware ops downstream.
     alpha, beta, mean_norm_mi_values = coarse_to_fine_grid_search(
         signal_mean, paired_mean, bb_masks,
-        max_grid_val=max_grid_val, grid_interval=grid_interval,
+        coef_max=coef_max, grid_interval_fine=grid_interval_fine,
+        grid_interval_coarse=grid_interval_coarse,
     )
-    return alpha, beta, np.array(mean_norm_mi_values).tolist()
+    return (
+        alpha,
+        beta,
+        np.array(mean_norm_mi_values).tolist(),
+        signal_mean,
+        paired_mean,
+        signal_bboxes,
+        paired_bboxes,
+    )
 
 
 def basic_segmentation(
@@ -990,6 +1038,21 @@ def get_bounding_box(masks: np.array, area_extension_factor: int = 2) -> np.arra
     return bb_masks
 
 
+def _bbox_coords(bb_masks):
+    """Extract (top_left, width, height) for each box in a get_bounding_box() output.
+    Returns a list of dicts: {"top_left": [x, y], "width": w, "height": h} (x=column,
+    y=row, 0-indexed from the image's top-left corner; matches the box's exact nonzero
+    rectangular extent -- get_bounding_box fills each box as a solid rectangle)."""
+    boxes = []
+    for i in range(bb_masks.shape[0]):
+        y, x = np.where(bb_masks[i] > 0)
+        if len(y) == 0:
+            continue
+        y0, y1, x0, x1 = int(y.min()), int(y.max()), int(x.min()), int(x.max())
+        boxes.append({"top_left": [x0, y0], "width": x1 - x0 + 1, "height": y1 - y0 + 1})
+    return boxes
+
+
 def apply_mixing_matrix(
     alpha: float, beta: float, signal_mean: np.array, paired_mean: np.array
 ) -> Tuple[np.array, np.array]:
@@ -1020,44 +1083,3 @@ def apply_mixing_matrix(
     recon_signal = recon_data[0, :].reshape(signal_mean.shape)
     recon_paired = recon_data[1, :].reshape(paired_mean.shape)
     return recon_signal, recon_paired
-
-
-def draw_masks_on_image(
-    img: np.array,
-    masks: np.array,
-    ax: matplotlib.axes.Axes = None,
-    color: str = "r",
-    linewidth: int = 1,
-) -> Tuple[matplotlib.figure.Figure, matplotlib.axes.Axes]:
-    """Draw masks on image
-
-    Parameters:
-    -----------
-    img : np.array
-        image
-    masks : np.array
-        masks (2D)
-    ax : matplotlib.axes.Axes, optional
-        axes to draw on, by default None
-    color : str, optional
-        color of the contour, by default 'r'
-    linewidth : int, optional
-        linewidth of the contour, by default 1
-
-    Returns: Only if ax was not provided
-    -----------
-    fig : matplotlib.figure.Figure
-        figure
-    ax : matplotlib.axes.Axes
-        axes
-    """
-    if ax is None:
-        fig, ax = plt.subplots(figsize=(10, 10))
-    ax.imshow(img, cmap="gray")
-
-    num_roi = np.max(masks)
-    for i in range(1, num_roi + 1):
-        ax.contour(masks == i, colors=color, linewidths=linewidth)
-    ax.axis("off")
-    if "fig" in locals():
-        return fig, ax
