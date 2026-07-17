@@ -10,6 +10,102 @@ import skimage
 from scipy import ndimage
 from skimage import filters, measure
 
+
+def get_epoch_start_frames(
+    data_length: int, max_num_epochs: int = 10, num_frames: int = 1000
+) -> Tuple[list, int]:
+    """Epoch start frames and per-epoch frame-window size, for a raw movie of
+    `data_length` frames.
+
+    Same epoch/frame-window convention as
+    ``paired_plane_registration.episodic_mean_fov`` (duplicated intentionally rather than
+    imported, to avoid a cross-module coupling -- keep this formula byte-for-byte identical
+    to that function's inline logic).
+
+    Parameters
+    ----------
+    data_length : int
+        number of frames in the raw movie (equivalently, the row count of the
+        ``{oeid}_motion_transform.csv`` motion-transform file, one row per raw frame)
+    max_num_epochs : int, optional
+        maximum number of epochs, by default 10
+    num_frames : int, optional
+        number of frames to average per epoch, by default 1000
+
+    Returns
+    -------
+    start_frames : list
+        start frame index (into the raw movie) of each epoch
+    num_frames_actual : int
+        number of frames actually averaged per epoch (may be less than `num_frames` if
+        the epoch interval is smaller)
+    """
+    num_epochs = min(max_num_epochs, data_length // num_frames)
+    epoch_interval = data_length // (num_epochs + 1)
+    num_frames_actual = min(num_frames, epoch_interval)
+    start_frames = [
+        num_frames_actual // 2 + i * epoch_interval for i in range(num_epochs)
+    ]
+    return start_frames, num_frames_actual
+
+
+def compute_mean_rigid_shift(
+    motion_df: pd.DataFrame, start_frame: int, num_frames: int
+) -> Tuple[float, float]:
+    """Mean (y, x) rigid shift over motion_df.iloc[start_frame:start_frame+num_frames].
+
+    Parameters
+    ----------
+    motion_df : pd.DataFrame
+        motion-transform dataframe with columns "y" and "x" (per-frame rigid shift)
+    start_frame : int
+        start frame index of the window
+    num_frames : int
+        number of frames in the window
+
+    Returns
+    -------
+    dy, dx : float
+        mean rigid shift (y, x) over the frame window
+    """
+    window = motion_df.iloc[start_frame : start_frame + num_frames]
+    return float(window["y"].mean()), float(window["x"].mean())
+
+
+def shift_mask(mask: np.array, dy: float, dx: float) -> np.array:
+    """Shift a labeled 2D mask by (dy, dx) pixels (rounded to nearest int).
+
+    Implemented via ``np.roll``, then zeroing out the wrapped-around border strip that the
+    roll introduces -- content must not wrap from one edge of the image to the opposite
+    edge.
+
+    Parameters
+    ----------
+    mask : np.array
+        2D labeled mask
+    dy, dx : float
+        shift amount in pixels along (row, column); rounded to the nearest int before
+        shifting
+
+    Returns
+    -------
+    np.array
+        shifted mask, same shape/dtype as `mask`
+    """
+    dy_int = int(np.round(dy))
+    dx_int = int(np.round(dx))
+    shifted = np.roll(mask, (dy_int, dx_int), axis=(0, 1))
+    if dy_int > 0:
+        shifted[:dy_int, :] = 0
+    elif dy_int < 0:
+        shifted[dy_int:, :] = 0
+    if dx_int > 0:
+        shifted[:, :dx_int] = 0
+    elif dx_int < 0:
+        shifted[:, dx_int:] = 0
+    return shifted
+
+
 def get_motion_correction_crop_xy_range_from_both_planes(
     oeid: int, paired_id: int, input_dir: Path
 ) -> Tuple[list, list]:
@@ -85,10 +181,24 @@ def decrosstalk_roi_image_from_episodic_mean_fov(
     grid_interval_fine: float = 0.01,
     grid_interval_coarse: float = 0.04,
     coef_max: float = 0.36,
+    dendrite_diameter_um: float = 4,
+    max_diameter_um: float = 20,
+    num_top_rois: int = 10,
     return_recon: float = False,
 ) -> Tuple[np.array, list, list, list, list, list, np.array, np.array]:
     """Get alpha and beta values for an experiment based on
     the mutual information of the ROI images from motion corrected episodic mean FOV images
+
+    Segmentation is done ONCE per plane, from a high-SNR image averaged across all epochs
+    -- not re-segmented from each epoch's own (noisier) mean image. A single global Otsu
+    threshold on one noisy epoch's image can fail on images with heterogeneous cell
+    brightness, yielding pathologically few ROI boxes (empirically verified: as few as 0-3
+    boxes on some epochs under the old per-epoch-segmentation approach).
+
+    Only the paired plane's ROI boxes are re-derived per epoch (by rigid-shifting the
+    reference mask -- see `shift_mask`), because they must line up with that epoch's
+    `registered_to_pair` data, whose registration differs epoch-to-epoch. The signal
+    plane's boxes are reused unchanged across all epochs.
 
     Parameters:
     -----------
@@ -108,6 +218,12 @@ def decrosstalk_roi_image_from_episodic_mean_fov(
         coarse grid step of the coarse-to-fine search, by default 0.04
     coef_max : float, optional
         maximum value of alpha and beta, by default 0.36
+    dendrite_diameter_um : float, optional
+        lower-bound ROI diameter in um (see `get_signal_paired_top_masks`), by default 4
+    max_diameter_um : float, optional
+        upper-bound ROI diameter in um (see `get_signal_paired_top_masks`), by default 20
+    num_top_rois : int, optional
+        number of top-intensity ROIs to keep per plane, by default 10
     return_recon : bool, optional
         whether to return the reconstructed signal and paired images, by default True
 
@@ -120,16 +236,17 @@ def decrosstalk_roi_image_from_episodic_mean_fov(
     mean_norm_mi_list : list
         list of mean normalized mutual information values across epochs
     signal_bboxes_list : list
-        per-epoch list of signal-plane ROI bounding boxes (see ``_bbox_coords``)
+        per-epoch list of signal-plane ROI bounding boxes (see ``_bbox_coords``) -- the
+        SAME boxes every epoch (segmented once, session-wide)
     paired_bboxes_list : list
-        per-epoch list of paired-plane ROI bounding boxes (see ``_bbox_coords``)
+        per-epoch list of paired-plane ROI bounding boxes (see ``_bbox_coords``) -- shifted
+        per epoch to track that epoch's `registered_to_pair` registration
     example_signal_mean : np.array
         cropped signal-plane mean image from epoch 0 (used for the MI grid search)
     example_paired_mean : np.array
         cropped paired-plane mean image from epoch 0 (used for the MI grid search)
     """
 
-    # Assign start frames for each epoch
     signal_fn = (
         Path("../results")
         / oeid
@@ -139,7 +256,110 @@ def decrosstalk_roi_image_from_episodic_mean_fov(
     with h5py.File(signal_fn, "r") as f:
         data_length = f["data"].shape[0]
         signal_data = f["data"][()]
-    start_frames = range(data_length)
+
+    paired_oeid = paired_reg_fn.parent.parent.name
+
+    # Paired plane's own self-registered EMF (all epochs) -- segmented once, in the paired
+    # plane's OWN frame; per-epoch boxes are then obtained by shifting this reference mask
+    # (see below), not by re-segmenting the noisier, epoch-specific registered_to_pair data.
+    paired_self_fn = (
+        paired_reg_fn.parent / f"{paired_oeid}_registered_episodic_mean_fov.h5"
+    )
+    with h5py.File(paired_self_fn, "r") as f:
+        paired_self_data = f["data"][()]
+
+    motion_buffer = 5
+    p1y, p1x = get_motion_correction_crop_xy_range_from_both_planes(
+        oeid, paired_oeid, input_dir
+    )
+    signal_data_cropped = signal_data[
+        :,
+        p1y[0] + motion_buffer : p1y[1] - motion_buffer,
+        p1x[0] + motion_buffer : p1x[1] - motion_buffer,
+    ]
+    paired_self_data_cropped = paired_self_data[
+        :,
+        p1y[0] + motion_buffer : p1y[1] - motion_buffer,
+        p1x[0] + motion_buffer : p1x[1] - motion_buffer,
+    ]
+    signal_mean_avg = signal_data_cropped.mean(axis=0)
+    paired_self_mean_avg = paired_self_data_cropped.mean(axis=0)
+
+    # Segment ONCE per plane from the epoch-averaged (high-SNR) image. Each plane's
+    # reference boxes come from its OWN independent call (that plane in the "signal"
+    # position) rather than the "paired" side-output of the other plane's call: the
+    # cross-plane overlap dedup in get_signal_paired_top_masks breaks rank ties in favor
+    # of whichever image is passed as "paired", so the same plane's boxes could otherwise
+    # subtly differ depending on which direction (this plane's own estimate, or its
+    # partner's) referenced it. Calling it once per plane with that plane always in the
+    # "signal" slot guarantees identical results either way.
+    # `paired_top_masks_ref` is in the PAIRED plane's own self-registered frame -- it is
+    # shifted into each epoch's registered_to_pair frame inside the loop below.
+    # exclude_edge_touching_bbox=True here (only here -- the full-session-mean detection
+    # step, per the "not from epochs" scoping) drops edge-touching ROIs BEFORE cross-plane
+    # dedup and top-N selection happen inside get_signal_paired_top_masks, so a box lost to
+    # the edge can still be backfilled by the next-best candidate instead of silently
+    # under-filling num_top_rois.
+    signal_top_masks_ref, _ = get_signal_paired_top_masks(
+        signal_mean_avg,
+        paired_self_mean_avg,
+        dendrite_diameter_um=dendrite_diameter_um,
+        max_diameter_um=max_diameter_um,
+        pix_size=pixel_size,
+        num_top_rois=num_top_rois,
+        exclude_edge_touching_bbox=True,
+    )
+    paired_top_masks_ref, _ = get_signal_paired_top_masks(
+        paired_self_mean_avg,
+        signal_mean_avg,
+        dendrite_diameter_um=dendrite_diameter_um,
+        max_diameter_um=max_diameter_um,
+        pix_size=pixel_size,
+        num_top_rois=num_top_rois,
+        exclude_edge_touching_bbox=True,
+    )
+    # Signal-plane boxes: reused for every epoch, never recomputed or shifted.
+    signal_bb_masks_ref = get_bounding_box(signal_top_masks_ref, pix_size=pixel_size)
+
+    # Motion-transform CSVs, loaded once, used to compute the per-epoch rigid-shift delta
+    # that maps paired_top_masks_ref into that epoch's registered_to_pair frame.
+    oeid_motion_df = pd.read_csv(
+        input_dir / oeid / "motion_correction" / f"{oeid}_motion_transform.csv",
+        usecols=["y", "x"],
+    )
+    paired_motion_df = pd.read_csv(
+        input_dir
+        / paired_oeid
+        / "motion_correction"
+        / f"{paired_oeid}_motion_transform.csv",
+        usecols=["y", "x"],
+    )
+    assert len(oeid_motion_df) == len(paired_motion_df), (
+        f"Motion-transform row counts differ between {oeid} ({len(oeid_motion_df)} rows) "
+        f"and paired plane {paired_oeid} ({len(paired_motion_df)} rows) -- these two planes "
+        "are assumed to be imaged simultaneously (same number of raw frames)."
+    )
+
+    start_frames, num_frames_actual = get_epoch_start_frames(len(oeid_motion_df))
+    assert len(start_frames) == signal_data.shape[0], (
+        f"Epoch count mismatch for {oeid}: get_epoch_start_frames computed "
+        f"{len(start_frames)} epochs from {len(oeid_motion_df)} raw frames (motion "
+        f"transform csv), but the cached episodic-mean-FOV file {signal_fn} has "
+        f"{signal_data.shape[0]} epochs. This likely means the max_num_epochs/num_frames "
+        "defaults used to generate that file differ from get_epoch_start_frames' defaults."
+    )
+    # paired_reg_fn (registered_to_pair) is the file actually indexed by epoch_idx inside
+    # decrosstalk_roi_image_single_pair_from_episodic_mean_fov -- check its epoch count
+    # too, not just signal_fn's, so a mismatch there (e.g. debug-mode truncating one file's
+    # epochs but not the other's) is caught loudly instead of silently reading an
+    # out-of-range (empty -> NaN) slice.
+    with h5py.File(paired_reg_fn, "r") as f:
+        paired_reg_fn_num_epochs = f["data"].shape[0]
+    assert len(start_frames) == paired_reg_fn_num_epochs, (
+        f"Epoch count mismatch for paired plane {paired_oeid}: get_epoch_start_frames "
+        f"computed {len(start_frames)} epochs, but {paired_reg_fn} has "
+        f"{paired_reg_fn_num_epochs} epochs."
+    )
 
     alpha_list = []
     beta_list = []
@@ -149,6 +369,29 @@ def decrosstalk_roi_image_from_episodic_mean_fov(
     example_signal_mean = None
     example_paired_mean = None
     for epoch_idx, start_frame in enumerate(start_frames):
+        dy_R, dx_R = compute_mean_rigid_shift(
+            oeid_motion_df, start_frame, num_frames_actual
+        )
+        dy_P, dx_P = compute_mean_rigid_shift(
+            paired_motion_df, start_frame, num_frames_actual
+        )
+        delta_y, delta_x = dy_P - dy_R, dx_P - dx_R
+        paired_top_masks_epoch = shift_mask(paired_top_masks_ref, delta_y, delta_x)
+        paired_bb_masks_epoch = get_bounding_box(paired_top_masks_epoch, pix_size=pixel_size)
+        # A box near the crop edge in the reference frame can shift entirely into the
+        # zeroed border strip introduced by shift_mask for some epochs, leaving it with
+        # zero pixels. Left in, this poisons the MI grid search: normalized_mutual_
+        # information on an empty selection is NaN, every (alpha, beta) grid point becomes
+        # NaN, and argmin over an all-NaN array silently degenerates to index 0 (alpha=
+        # beta=0.0) -- empirically observed and root-caused this way. Drop any box that
+        # came out empty rather than propagate this.
+        non_empty = [
+            i for i in range(paired_bb_masks_epoch.shape[0])
+            if paired_bb_masks_epoch[i].sum() > 0
+        ]
+        if len(non_empty) < paired_bb_masks_epoch.shape[0]:
+            paired_bb_masks_epoch = paired_bb_masks_epoch[non_empty]
+
         (
             alpha,
             beta,
@@ -161,15 +404,20 @@ def decrosstalk_roi_image_from_episodic_mean_fov(
             oeid,
             paired_reg_fn,
             input_dir,
-            start_frame,
+            epoch_idx,
             pixel_size,
             grid_interval_fine=grid_interval_fine,
             grid_interval_coarse=grid_interval_coarse,
             coef_max=coef_max,
+            signal_bb_masks=signal_bb_masks_ref,
+            paired_bb_masks=paired_bb_masks_epoch,
         )
         alpha_list.append(alpha)
         beta_list.append(beta)
         mean_norm_mi_list.append(mean_norm_mi_values)
+        # signal_bboxes / paired_bboxes returned above already equal
+        # _bbox_coords(signal_bb_masks_ref) / _bbox_coords(paired_bb_masks_epoch), since
+        # those exact bb_masks were passed in and no re-segmentation happened.
         signal_bboxes_list.append(signal_bboxes)
         paired_bboxes_list.append(paired_bboxes)
         if epoch_idx == 0:
@@ -624,6 +872,8 @@ def decrosstalk_roi_image_single_pair_from_episodic_mean_fov(
     grid_interval_fine: float = 0.01,
     grid_interval_coarse: float = 0.04,
     coef_max: float = 0.36,
+    signal_bb_masks: np.array = None,
+    paired_bb_masks: np.array = None,
 ) -> Tuple[float, float, list, np.array, np.array, list, list]:
     """Get alpha and beta values for a single pair of mean images
     based on the mean normalized mutual information of the ROI images
@@ -651,6 +901,17 @@ def decrosstalk_roi_image_single_pair_from_episodic_mean_fov(
         coarse grid step of the coarse-to-fine search, by default 0.04
     coef_max : float, optional
         maximum value of alpha and beta, by default 0.36
+    signal_bb_masks : np.array, optional
+        pre-computed signal-plane ROI bounding-box masks (see `get_bounding_box`). If
+        given (together with `paired_bb_masks`), segmentation is skipped entirely for this
+        epoch and these masks are used directly -- the caller (
+        `decrosstalk_roi_image_from_episodic_mean_fov`) segments once per plane and passes
+        the (per-epoch-shifted, for the paired plane) result in. By default None, which
+        preserves the original behavior: segment fresh from this epoch's own
+        `signal_mean`/`paired_mean` images (used directly by external callers/scripts that
+        exercise this function on its own).
+    paired_bb_masks : np.array, optional
+        pre-computed paired-plane ROI bounding-box masks; see `signal_bb_masks`.
 
     Returns:
     -----------
@@ -692,13 +953,20 @@ def decrosstalk_roi_image_single_pair_from_episodic_mean_fov(
         p1x[0] + motion_buffer : p1x[1] - motion_buffer,
     ]
 
-    # Get the top masks of the signal and paired planes
-    signal_top_masks, paired_top_masks = get_signal_paired_top_masks(
-        signal_mean, paired_mean, pix_size=pix_size
-    )  # About 22 s
-    # Create bounding boxes
-    signal_bb_masks = get_bounding_box(signal_top_masks)
-    paired_bb_masks = get_bounding_box(paired_top_masks)
+    assert (signal_bb_masks is None) == (paired_bb_masks is None), (
+        "signal_bb_masks and paired_bb_masks must be given together or not at all -- "
+        f"got signal_bb_masks={'None' if signal_bb_masks is None else 'given'}, "
+        f"paired_bb_masks={'None' if paired_bb_masks is None else 'given'}."
+    )
+    if signal_bb_masks is None:
+        # Backward-compat path: segment fresh from this epoch's own mean images (also
+        # exercised directly by external test scripts) -- see get_signal_paired_top_masks.
+        signal_top_masks, paired_top_masks = get_signal_paired_top_masks(
+            signal_mean, paired_mean, pix_size=pix_size
+        )
+        signal_bb_masks = get_bounding_box(signal_top_masks, pix_size=pix_size)
+        paired_bb_masks = get_bounding_box(paired_top_masks, pix_size=pix_size)
+
     signal_bboxes = _bbox_coords(signal_bb_masks)
     paired_bboxes = _bbox_coords(paired_bb_masks)
     bb_masks = np.concatenate([signal_bb_masks, paired_bb_masks])
@@ -726,17 +994,16 @@ def decrosstalk_roi_image_single_pair_from_episodic_mean_fov(
 
 def basic_segmentation(
     mean_img: np.array,
-    min_object_size: int = 100,
-    max_object_size: int = 300,
     sigma_segmentation: int = 30,
 ) -> np.array:
     """Fast classical soma segmentation, replacing CellPose.
 
     Adapted from aind-ophys-movie-qc `get_and_plot_basic_segmentation`:
     Gaussian high-pass (remove neuropil/background) -> Otsu threshold ->
-    connected components -> keep objects with min < area < max pixels.
-    Returns an integer-labeled mask (0=background, 1..N=ROIs), matching the
-    CellPose `model.eval` output consumed downstream.
+    connected components. Returns an integer-labeled mask (0=background,
+    1..N=ROIs), matching the CellPose `model.eval` output consumed downstream.
+    Size-based pruning is left entirely to `filter_dendrite`'s physical
+    (diameter-based) criterion rather than an arbitrary pixel-count cutoff here.
 
     Validated to reproduce the CellPose-pipeline alpha/beta (esp. beta, the
     crosstalk-removal knob) within ~0.01-0.02; see session02 consistency check.
@@ -745,32 +1012,120 @@ def basic_segmentation(
     neuropil = ndimage.gaussian_filter(mean_img, sigma=sigma_segmentation)
     high_pass = mean_img - neuropil
     binary = high_pass > filters.threshold_otsu(high_pass)
-    label_image = measure.label(binary)
-    masks = np.zeros_like(label_image)
-    n = 0
-    for region in measure.regionprops(label_image):
-        if min_object_size < region.area < max_object_size:
-            n += 1
-            masks[label_image == region.label] = n
-    return masks
+    return measure.label(binary)
+
+
+def segment_and_filter_with_relaxation(
+    mean_img: np.array,
+    dendrite_diameter_pix: float,
+    max_diameter_pix: float,
+    target_count: int,
+    sigma_segmentation: int = 30,
+    relaxation_factors: tuple = (1.0, 0.7, 0.5),
+    exclude_edge_touching_bbox: bool = False,
+    pix_size: float = 0.78,
+) -> np.array:
+    """Segment `mean_img` and progressively relax the Otsu threshold until at least
+    `target_count` ROIs survive size (and, if requested, edge) filtering.
+
+    A single global Otsu threshold on one image can fail to separate cells of
+    heterogeneous brightness, yielding too few ROIs. Rather than re-picking a threshold
+    (unstable), this computes the image's own high-pass image and base Otsu threshold
+    ONCE, then tries `base_thresh * factor` for each `factor` in `relaxation_factors` (in
+    order, e.g. 1.0 -> 0.7 -> 0.5) so dimmer ROIs are progressively included, stopping as
+    soon as enough ROIs are found. Does not call `basic_segmentation` (kept standalone and
+    unmodified for other callers); the high-pass computation is intentionally duplicated
+    here.
+
+    `exclude_edge_touching_bbox`, if set, drops edge-touching ROIs (see
+    `filter_edge_touching_roi`) as part of EACH attempt's own filtering -- i.e. before
+    `target_count` is checked and before any downstream cross-plane dedup / top-N
+    selection happens on the result. Filtering edge-touching boxes only *after* top-N
+    selection would silently under-fill the requested count (a selected box dropped late
+    can't be backfilled by the next-best candidate); doing it here, as part of the
+    candidate pool itself, also lets relaxation compensate for edge losses the same way it
+    already compensates for a strict threshold.
+
+    Parameters
+    ----------
+    mean_img : np.array
+        mean image to segment
+    dendrite_diameter_pix : float
+        lower-bound diameter (pix); ROIs smaller than this (by area) are discarded as
+        dendrite fragments (see `filter_dendrite`)
+    max_diameter_pix : float
+        upper-bound diameter (pix); ROIs larger than this (by area) are discarded as
+        oversized blobs/artifacts (see `filter_oversized_roi`)
+    target_count : int
+        stop relaxing once the labeled mask has at least this many ROIs
+    sigma_segmentation : int, optional
+        Gaussian high-pass sigma, by default 30 (same as `basic_segmentation`)
+    relaxation_factors : tuple, optional
+        multipliers applied to the base Otsu threshold, tried in order, by default
+        (1.0, 0.7, 0.5)
+    exclude_edge_touching_bbox : bool, optional
+        if True, also drop ROIs whose bounding box touches the image edge (see
+        `filter_edge_touching_roi`), as part of each attempt, by default False
+    pix_size : float, optional
+        pixel size in um, only used if `exclude_edge_touching_bbox` is True, by default
+        0.78
+
+    Returns
+    -------
+    np.array
+        reordered (1..N), filtered labeled mask from the first relaxation factor that
+        reaches `target_count` ROIs, or the most-relaxed attempt's result if none do
+    """
+    neuropil = ndimage.gaussian_filter(mean_img, sigma=sigma_segmentation)
+    high_pass = mean_img - neuropil
+    base_thresh = filters.threshold_otsu(high_pass)
+
+    result = None
+    for factor in relaxation_factors:
+        binary = high_pass > (base_thresh * factor)
+        labeled = measure.label(binary)
+        filtered = filter_dendrite(labeled, dendrite_diameter_pix=dendrite_diameter_pix)
+        filtered = filter_oversized_roi(filtered, max_diameter_pix=max_diameter_pix)
+        if exclude_edge_touching_bbox:
+            filtered = filter_edge_touching_roi(filtered, pix_size=pix_size)
+        result = reorder_mask(filtered)
+        if int(result.max()) >= target_count:
+            break
+    return result
 
 
 def get_signal_paired_top_masks(
     signal_mean: np.array,
     paired_mean: np.array,
-    dendrite_diameter_um: int = 10,
+    dendrite_diameter_um: float = 4,
+    max_diameter_um: float = 20,
     pix_size: float = 0.78,
-    nrshiftmax: int = 5,
-    overlap_threshold: int = 0.7,
-    num_top_rois: int = 15,
+    overlap_threshold: float = 0.7,
+    num_top_rois: int = 10,
+    relaxation_factors: tuple = (1.0, 0.7, 0.5),
+    exclude_edge_touching_bbox: bool = False,
 ) -> Tuple[np.array, np.array]:
-    """Get top masks of 2 paired mean images
-    Apply CellPose to get the masks, then filter dendrites and border ROIs
-    Then get the top n intensity masks from both planes
+    """Get top masks of 2 paired mean images.
+
+    Each image is segmented with a dynamically-relaxed Otsu threshold (see
+    `segment_and_filter_with_relaxation`): starting from the image's own Otsu threshold,
+    progressively relax it (per `relaxation_factors`) until at least `num_top_rois` ROIs
+    survive size filtering. This makes segmentation robust to heterogeneous cell
+    brightness within a single (possibly noisy) image, instead of failing outright (too
+    few ROIs) when one global threshold is too strict.
+
+    ROIs are filtered on BOTH size bounds: too-small (`dendrite_diameter_um`, dendrite
+    fragments, via `filter_dendrite`) and too-large (`max_diameter_um`, merged
+    blobs/artifacts, via `filter_oversized_roi`). Then the top n intensity masks are kept
+    from both planes.
 
     There can be duplicates due to excessive crosstalk:
     - Identify duplicate ROIs based on the overlap between the masks of the two planes
     - Remove the one with lower rank in intensity from all ROIs in the corresponding plane
+
+    No separate border filter is applied here: `signal_mean`/`paired_mean` are already
+    cropped to the motion-correction-safe region (plus a buffer) by the caller, so a
+    ROI surviving into this function is already clear of the registration-rolling border.
 
     Parameters:
     -----------
@@ -779,16 +1134,27 @@ def get_signal_paired_top_masks(
     paired_mean : np.array
         mean image of the paired plane
     dendrite_diameter_um : float, optional
-        diameter of dendrite in um, by default 10
+        lower-bound diameter of a valid ROI in um (below this, discarded as a dendrite
+        fragment), by default 4
+    max_diameter_um : float, optional
+        upper-bound diameter of a valid ROI in um (above this, discarded as an oversized
+        blob/artifact), by default 20
     pix_size : float, optional
         pixel size in um, by default 0.78
-    nrshiftmax : int, optional
-        number of pixels to crop from the nonrigid motion corrected image, by default 5
-        #TODO: Get this from the suite2p parameters
     overlap_threshold : float, optional
         threshold of overlap between signal and paired masks, by default 0.7
     num_top_rois : int, optional
-        number of top ROIs to keep, by default 15
+        number of top ROIs to keep, and the target ROI count for the Otsu-relaxation
+        search, by default 10
+    relaxation_factors : tuple, optional
+        multipliers applied (in order) to each image's own Otsu threshold until
+        `num_top_rois` ROIs are found, by default (1.0, 0.7, 0.5)
+    exclude_edge_touching_bbox : bool, optional
+        if True, drop ROIs whose bounding box touches the image edge as part of each
+        plane's own candidate-pool filtering, BEFORE cross-plane dedup and top-N
+        selection (see `segment_and_filter_with_relaxation`) -- filtering this only after
+        top-N selection would silently under-fill num_top_rois, since a selected box
+        dropped late can't be backfilled by the next-best candidate. By default False.
 
     Returns:
     -----------
@@ -798,26 +1164,27 @@ def get_signal_paired_top_masks(
         top masks of the paired plane
     """
 
-    signal_masks = basic_segmentation(signal_mean)
-
     dendrite_diameter_px = dendrite_diameter_um / pix_size
-    signal_masks_dendrite_filtered = filter_dendrite(
-        signal_masks, dendrite_diameter_pix=dendrite_diameter_px
-    )
-    signal_masks_filtered = filter_border_roi(
-        signal_masks_dendrite_filtered, buffer_pix=nrshiftmax
-    )
+    max_diameter_px = max_diameter_um / pix_size
 
-    paired_masks = basic_segmentation(paired_mean)
-    paired_masks_dendrite_filtered = filter_dendrite(
-        paired_masks, dendrite_diameter_pix=dendrite_diameter_px
+    signal_masks_filtered = segment_and_filter_with_relaxation(
+        signal_mean,
+        dendrite_diameter_pix=dendrite_diameter_px,
+        max_diameter_pix=max_diameter_px,
+        target_count=num_top_rois,
+        relaxation_factors=relaxation_factors,
+        exclude_edge_touching_bbox=exclude_edge_touching_bbox,
+        pix_size=pix_size,
     )
-    paired_masks_filtered = filter_border_roi(
-        paired_masks_dendrite_filtered, buffer_pix=nrshiftmax
+    paired_masks_filtered = segment_and_filter_with_relaxation(
+        paired_mean,
+        dendrite_diameter_pix=dendrite_diameter_px,
+        max_diameter_pix=max_diameter_px,
+        target_count=num_top_rois,
+        relaxation_factors=relaxation_factors,
+        exclude_edge_touching_bbox=exclude_edge_touching_bbox,
+        pix_size=pix_size,
     )
-
-    signal_masks_filtered = reorder_mask(signal_masks_filtered)
-    paired_masks_filtered = reorder_mask(paired_masks_filtered)
 
     num_signal_masks = np.max(signal_masks_filtered)
     num_paired_masks = np.max(paired_masks_filtered)
@@ -881,31 +1248,76 @@ def filter_dendrite(
     return filtered_mask
 
 
-def filter_border_roi(masks: np.array, buffer_pix: int = 5) -> np.array:
-    """Filter ROIs that are too close to the border of the FOV
+def filter_oversized_roi(
+    masks: np.array, max_diameter_pix: float = (20 / 0.78)
+) -> np.array:
+    """Filter oversized ROIs from masks based on area threshold
 
     Input Parameters
     ----------------
     masks: 2d array, each ROI has a unique integer value
-    border_width_pix: int, width of border in pix
+    max_diameter_pix: float, maximum diameter of a valid ROI in pix
 
     Returns
     -------
     filtered_mask: 2d array, after filtering
+        Note - the filtered mask is not necessarily contiguous
     """
-    border_mask = np.zeros(masks.shape, dtype=bool)
-    border_mask[:buffer_pix, :] = 1
-    border_mask[-buffer_pix:, :] = 1
-    border_mask[:, :buffer_pix] = 1
-    border_mask[:, -buffer_pix:] = 1
-
-    filtered_mask = masks.copy()
+    max_radius = max_diameter_pix / 2
+    area_threshold = np.pi * max_radius**2
     num_roi = np.max(masks)
+    filtered_mask = masks.copy()
     for roi_id in range(1, num_roi + 1):
         roi_mask = masks == roi_id
-        if np.any(roi_mask & border_mask):
+        roi_area = np.sum(roi_mask)
+        if roi_area > area_threshold:
             filtered_mask[roi_mask] = 0
+    return filtered_mask
 
+
+def filter_edge_touching_roi(
+    masks: np.array,
+    area_extension_factor: float = 2,
+    min_buffer_um: float = 5,
+    pix_size: float = 0.78,
+) -> np.array:
+    """Remove ROIs whose BOUNDING BOX (see get_bounding_box -- the tight ROI extended by
+    its buffer) touches any edge of the image (row 0, last row, col 0, last col).
+
+    Checked on the box get_bounding_box would actually produce, not just the raw
+    segmented ROI shape: a box can reach the edge purely because its buffer gets clamped
+    there, even when the underlying detected cell is fully interior -- such a box is just
+    as edge-limited/asymmetric in practice (less context on the clamped side) as one whose
+    raw detection touches the edge outright, so both are excluded here. Intended for use
+    on the full-session-averaged reference image only (see caller); per-epoch boxes are
+    derived by shifting an already-vetted reference box, not re-filtered here.
+
+    Input Parameters
+    ----------------
+    masks: 2d array, each ROI has a unique integer value
+
+    Returns
+    -------
+    filtered_mask: 2d array, after filtering
+        Note - the filtered mask is not necessarily contiguous
+    """
+    bb_masks = get_bounding_box(
+        masks,
+        area_extension_factor=area_extension_factor,
+        min_buffer_um=min_buffer_um,
+        pix_size=pix_size,
+    )
+    mask_inds = np.setdiff1d(np.unique(masks), 0)
+    filtered_mask = masks.copy()
+    for i, roi_id in enumerate(mask_inds):
+        box = bb_masks[i]
+        if (
+            np.any(box[0, :])
+            or np.any(box[-1, :])
+            or np.any(box[:, 0])
+            or np.any(box[:, -1])
+        ):
+            filtered_mask[masks == roi_id] = 0
     return filtered_mask
 
 
@@ -992,8 +1404,22 @@ def reorder_mask(mask: np.array) -> np.array:
     return mask_reordered
 
 
-def get_bounding_box(masks: np.array, area_extension_factor: int = 2) -> np.array:
-    """Get bounding box of ROI masks
+def get_bounding_box(
+    masks: np.array,
+    area_extension_factor: float = 2,
+    min_buffer_um: float = 5,
+    pix_size: float = 0.78,
+) -> np.array:
+    """Get bounding box of ROI masks: the tight bounding box of each ROI, expanded on
+    each axis by whichever is LARGER of (a) a size-proportional extension (assuming a
+    circular ROI, area_extension_factor controls how much bigger the box's area is vs
+    the ROI's own area) or (b) a fixed min_buffer_um (converted to pixels via pix_size).
+
+    The size-proportional extension alone gives very small ROIs almost no buffer at all
+    (e.g. a 1px-tall ROI got ~0px of padding under a pure ratio, occasionally rounding
+    down to an empty box entirely) -- flooring at min_buffer_um keeps every box a
+    physically meaningful, non-degenerate size regardless of how small the underlying
+    segmented region is, while still growing proportionally for larger ROIs as before.
 
     Parameters:
     -----------
@@ -1003,6 +1429,11 @@ def get_bounding_box(masks: np.array, area_extension_factor: int = 2) -> np.arra
         factor to extend the bounding box, by default 2
         Roughly the area of the bounding box will be larger than that of the ROI by this factor
         Assuming circular ROI.
+    min_buffer_um : float, optional
+        minimum buffer (in um) enforced on all sides of each ROI's tight bounding box,
+        even where the size-proportional extension would be smaller, by default 5
+    pix_size : float, optional
+        pixel size in um, by default 0.78
 
     Returns:
     -----------
@@ -1011,6 +1442,7 @@ def get_bounding_box(masks: np.array, area_extension_factor: int = 2) -> np.arra
     """
 
     bb_extension = np.sqrt(area_extension_factor * np.pi / 4)
+    min_buffer_px = min_buffer_um / pix_size
     mask_inds = np.setdiff1d(np.unique(masks), 0)
 
     bb_masks = np.zeros((len(mask_inds), *masks.shape), dtype=np.uint16)
@@ -1020,19 +1452,15 @@ def get_bounding_box(masks: np.array, area_extension_factor: int = 2) -> np.arra
         bb_x_tight = [x.min(), x.max()]
         bb_y_tight_len = bb_y_tight[1] - bb_y_tight[0]
         bb_x_tight_len = bb_x_tight[1] - bb_x_tight[0]
+        y_extension = max(bb_extension * bb_y_tight_len / 2, min_buffer_px)
+        x_extension = max(bb_extension * bb_x_tight_len / 2, min_buffer_px)
         bb_y = [
-            max(0, int(np.round(bb_y_tight[0] - bb_extension * bb_y_tight_len / 2))),
-            min(
-                masks.shape[0],
-                int(np.round(bb_y_tight[1] + bb_extension * bb_y_tight_len / 2)),
-            ),
+            max(0, int(np.round(bb_y_tight[0] - y_extension))),
+            min(masks.shape[0], int(np.round(bb_y_tight[1] + y_extension))),
         ]
         bb_x = [
-            max(0, int(np.round(bb_x_tight[0] - bb_extension * bb_x_tight_len / 2))),
-            min(
-                masks.shape[1],
-                int(np.round(bb_x_tight[1] + bb_extension * bb_x_tight_len / 2)),
-            ),
+            max(0, int(np.round(bb_x_tight[0] - x_extension))),
+            min(masks.shape[1], int(np.round(bb_x_tight[1] + x_extension))),
         ]
         bb_masks[i, bb_y[0] : bb_y[1], bb_x[0] : bb_x[1]] = mask_i
     return bb_masks

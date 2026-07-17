@@ -123,6 +123,9 @@ def estimate_alpha_beta(
     grid_interval_fine: float = 0.01,
     grid_interval_coarse: float = 0.04,
     coef_max: float = 0.36,
+    dendrite_diameter_um: float = 4,
+    max_diameter_um: float = 20,
+    num_top_rois: int = 10,
 ):
     """Estimate per-epoch (alpha, beta) for one plane from the episodic-mean-FOV images.
 
@@ -156,6 +159,9 @@ def estimate_alpha_beta(
         grid_interval_fine=grid_interval_fine,
         grid_interval_coarse=grid_interval_coarse,
         coef_max=coef_max,
+        dendrite_diameter_um=dendrite_diameter_um,
+        max_diameter_um=max_diameter_um,
+        num_top_rois=num_top_rois,
     )
     return (
         alpha_list,
@@ -544,6 +550,12 @@ if __name__ == "__main__":
                         help="maximum alpha/beta value for the grid search and QC plot axes")
     parser.add_argument("--recip-flag", type=float, default=0.05,
                         help="reciprocity-gap threshold flagged in the QC figure")
+    parser.add_argument("--dendrite-diameter-um", type=float, default=4,
+                        help="lower-bound ROI diameter (um); smaller ROIs are discarded as dendrite fragments")
+    parser.add_argument("--max-diameter-um", type=float, default=20,
+                        help="upper-bound ROI diameter (um); larger ROIs are discarded as oversized blobs/artifacts")
+    parser.add_argument("--num-top-rois", type=int, default=10,
+                        help="number of top-intensity ROIs to keep per plane (also the Otsu-relaxation target count)")
 
     args = parser.parse_args()
     input_dir = Path("../data/").resolve()
@@ -613,6 +625,9 @@ if __name__ == "__main__":
         grid_interval_fine=args.grid_interval_fine,
         grid_interval_coarse=args.grid_interval_coarse,
         coef_max=args.coef_max,
+        dendrite_diameter_um=args.dendrite_diameter_um,
+        max_diameter_um=args.max_diameter_um,
+        num_top_rois=args.num_top_rois,
     )
     start_time_oeid2 = dt.now()
     (
@@ -623,6 +638,9 @@ if __name__ == "__main__":
         grid_interval_fine=args.grid_interval_fine,
         grid_interval_coarse=args.grid_interval_coarse,
         coef_max=args.coef_max,
+        dendrite_diameter_um=args.dendrite_diameter_um,
+        max_diameter_um=args.max_diameter_um,
+        num_top_rois=args.num_top_rois,
     )
     (alpha1, beta1), (alpha2, beta2) = average_paired_coeffs(
         a1_list, b1_list, a2_list, b2_list
