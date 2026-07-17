@@ -40,7 +40,9 @@ def get_epoch_start_frames(
         number of frames actually averaged per epoch (may be less than `num_frames` if
         the epoch interval is smaller)
     """
-    num_epochs = min(max_num_epochs, data_length // num_frames)
+    # keep >=1 epoch for short movies (e.g. debug), else start_frames is empty; must stay
+    # identical to paired_plane_registration.episodic_mean_fov so epoch counts match
+    num_epochs = min(max_num_epochs, max(1, data_length // num_frames))
     epoch_interval = data_length // (num_epochs + 1)
     num_frames_actual = min(num_frames, epoch_interval)
     start_frames = [

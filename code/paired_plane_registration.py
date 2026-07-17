@@ -484,7 +484,8 @@ def episodic_mean_fov(
         raise (ValueError("save_dir must be a directory"))
     with h5py.File(movie_fn, "r") as f:
         data_length = f["data"].shape[0]
-        num_epochs = min(max_num_epochs, data_length // num_frames)
+        # keep >=1 epoch for short movies (e.g. debug), else start_frames is empty
+        num_epochs = min(max_num_epochs, max(1, data_length // num_frames))
         epoch_interval = data_length // (num_epochs + 1)
         num_frames = min(num_frames, epoch_interval)
         # ignore half of the epoch length at the beginning and the end
