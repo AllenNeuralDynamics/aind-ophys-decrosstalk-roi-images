@@ -126,16 +126,22 @@ def estimate_alpha_beta(
     dendrite_diameter_um: float = 4,
     max_diameter_um: float = 20,
     num_top_rois: int = 10,
+    sigma_segmentation: int = 30,
 ):
     """Estimate per-epoch (alpha, beta) for one plane from the episodic-mean-FOV images.
 
     No movie is reconstructed here; estimation is separated from application so paired
     coefficients can be reciprocity-averaged before the (expensive) full-movie apply.
 
+    `sigma_segmentation` is the Gaussian high-pass sigma used for the once-per-plane
+    reference segmentation (see `decrosstalk_roi_image.get_signal_paired_top_masks` /
+    `segment_and_filter_with_relaxation`), passed straight through.
+
     Returns
     -------
     (alpha_list, beta_list, mean_norm_mi_list, paired_reg_emf_fn, signal_bboxes_list,
-     paired_bboxes_list, example_signal_mean, example_paired_mean)
+     paired_bboxes_list, example_signal_mean, example_paired_mean, signal_mean_avg,
+     paired_mean_avg, paired_bboxes_ref, signal_mean_list, paired_mean_list)
     """
     logging.info(f"Estimating alpha/beta for {oeid} (paired {paired_oeid})")
     paired_reg_emf_fn = next(
@@ -152,6 +158,11 @@ def estimate_alpha_beta(
         paired_bboxes_list,
         example_signal_mean,
         example_paired_mean,
+        signal_mean_avg,
+        paired_mean_avg,
+        paired_bboxes_ref,
+        signal_mean_list,
+        paired_mean_list,
     ) = dri.decrosstalk_roi_image_from_episodic_mean_fov(
         oeid,
         paired_reg_emf_fn,
@@ -162,6 +173,7 @@ def estimate_alpha_beta(
         dendrite_diameter_um=dendrite_diameter_um,
         max_diameter_um=max_diameter_um,
         num_top_rois=num_top_rois,
+        sigma_segmentation=sigma_segmentation,
     )
     return (
         alpha_list,
@@ -172,6 +184,11 @@ def estimate_alpha_beta(
         paired_bboxes_list,
         example_signal_mean,
         example_paired_mean,
+        signal_mean_avg,
+        paired_mean_avg,
+        paired_bboxes_ref,
+        signal_mean_list,
+        paired_mean_list,
     )
 
 
@@ -197,6 +214,11 @@ def apply_decrosstalk_movie(
     paired_bboxes_list: list = None,
     example_signal_mean: np.ndarray = None,
     example_paired_mean: np.ndarray = None,
+    signal_mean_avg: np.ndarray = None,
+    paired_mean_avg: np.ndarray = None,
+    paired_bboxes_ref: list = None,
+    signal_mean_list: list = None,
+    paired_mean_list: list = None,
 ) -> Path:
     """Apply the given (alpha, beta) mixing correction to the full registered movie in
     chunks and write {oeid}_decrosstalk.h5.
@@ -205,9 +227,15 @@ def apply_decrosstalk_movie(
     they are recorded in the metadata (alpha_mean/beta_mean). The stored alpha_list /
     beta_list / mean_norm_mi_list remain this plane's raw per-epoch estimates for QC.
     `partner_alpha_list`/`partner_beta_list`, if given, add the pair-symmetry panel to the
-    landscape QC figure (reciprocity check). `signal_bboxes_list`/`paired_bboxes_list`/
-    `example_signal_mean`/`example_paired_mean`, if given, render an ROI-bounding-box QC
-    page and are stored alongside the other QC values.
+    landscape QC figure (reciprocity check). `signal_bboxes_list`/`paired_bboxes_list` are
+    stored alongside the other QC values (qc-values.json). `example_signal_mean`/
+    `example_paired_mean` are accepted for backward compatibility but are no longer used
+    here (superseded by the two ROI-bounding-box QC pages below); kept as parameters since
+    callers still forward them from `estimate_alpha_beta`. `signal_mean_avg`/
+    `paired_mean_avg`/`paired_bboxes_ref`, if given, render a full-session-mean-FOV
+    ROI-bounding-box QC page. `signal_mean_list`/`paired_mean_list`, if given (together
+    with `signal_bboxes_list`/`paired_bboxes_list`), render a per-epoch grid ROI-bounding-
+    box QC page.
     """
     logging.info(
         f"Applying decrosstalk to {oeid}: alpha={alpha:.3f}, beta={beta:.3f}"
@@ -303,25 +331,42 @@ def apply_decrosstalk_movie(
             mean_norm_mi_list, alpha_list, beta_list,
             title=f"{oeid} decrosstalk landscapes  (applied a={alpha:.3f}, b={beta:.3f})",
             applied=(float(alpha), float(beta)), partner=partner,
-            grid_interval_fine=grid_interval_fine, coef_max=coef_max,
+            grid_interval_fine=grid_interval_fine, grid_interval_coarse=grid_interval_coarse,
+            coef_max=coef_max,
             recip_flag=recip_flag,
             save=str(output_dir / f"{oeid}_decrosstalk_landscape.png"),
         )
     except Exception as exc:  # noqa: BLE001
         logging.warning(f"landscape QC page failed for {oeid}: {exc}")
-    # One-page ROI-bounding-box QC figure: shows exactly which regions the estimator used
-    # (epoch 0), on both planes' cropped mean images. Non-critical (guarded).
+    # ROI-bounding-box QC figures: shows exactly which regions the estimator used, on both
+    # planes' mean images. Non-critical (guarded) -- a plotting failure must not fail the
+    # decrosstalk run.
+    # (1) Full-session mean FOV: signal plane's (session-wide) boxes and the paired
+    # plane's own PRE-shift reference boxes, both drawn on the full-session-averaged
+    # reference images.
     try:
-        if example_signal_mean is not None and example_paired_mean is not None:
+        if signal_mean_avg is not None and paired_mean_avg is not None:
             dri.render_roi_bbox_page(
-                example_signal_mean, example_paired_mean,
+                signal_mean_avg, paired_mean_avg,
                 signal_bboxes_list[0] if signal_bboxes_list else [],
-                paired_bboxes_list[0] if paired_bboxes_list else [],
-                title=f"{oeid} ROI bounding boxes (epoch 0)",
-                save=str(output_dir / f"{oeid}_decrosstalk_roi_boxes.png"),
+                paired_bboxes_ref if paired_bboxes_ref else [],
+                title=f"{oeid} ROI bounding boxes (full-session mean FOV)",
+                save=str(output_dir / f"{oeid}_decrosstalk_roi_boxes_mean_fov.png"),
             )
     except Exception as exc:  # noqa: BLE001
-        logging.warning(f"ROI bbox QC page failed for {oeid}: {exc}")
+        logging.warning(f"ROI bbox mean-FOV QC page failed for {oeid}: {exc}")
+    # (2) Per-epoch grid: current-plane (fixed) boxes alongside the paired-plane
+    # (per-epoch-shifted) boxes, epoch by epoch.
+    try:
+        if signal_mean_list and paired_mean_list:
+            dri.render_roi_bbox_per_epoch_page(
+                signal_mean_list, paired_mean_list,
+                signal_bboxes_list, paired_bboxes_list,
+                title=f"{oeid} ROI bounding boxes (per epoch)",
+                save=str(output_dir / f"{oeid}_decrosstalk_roi_boxes_per_epoch.png"),
+            )
+    except Exception as exc:  # noqa: BLE001
+        logging.warning(f"ROI bbox per-epoch QC page failed for {oeid}: {exc}")
     # Same data as the figure above, as JSON (no plot) -- lets the QC figure be
     # regenerated or re-styled downstream without re-reading the (large) decrosstalk h5.
     try:
@@ -556,6 +601,8 @@ if __name__ == "__main__":
                         help="upper-bound ROI diameter (um); larger ROIs are discarded as oversized blobs/artifacts")
     parser.add_argument("--num-top-rois", type=int, default=10,
                         help="number of top-intensity ROIs to keep per plane (also the Otsu-relaxation target count)")
+    parser.add_argument("--sigma-segmentation", type=int, default=30,
+                        help="Gaussian high-pass sigma for basic_segmentation/segment_and_filter_with_relaxation")
 
     args = parser.parse_args()
     input_dir = Path("../data/").resolve()
@@ -620,6 +667,8 @@ if __name__ == "__main__":
     (
         a1_list, b1_list, mi1_list, paired_emf1,
         signal_bboxes1, paired_bboxes1, example_signal_mean1, example_paired_mean1,
+        signal_mean_avg1, paired_mean_avg1, paired_bboxes_ref1,
+        signal_mean_list1, paired_mean_list1,
     ) = estimate_alpha_beta(
         oeid1, oeid2, oeid1_input_dir, oeid1_output_dir,
         grid_interval_fine=args.grid_interval_fine,
@@ -628,11 +677,14 @@ if __name__ == "__main__":
         dendrite_diameter_um=args.dendrite_diameter_um,
         max_diameter_um=args.max_diameter_um,
         num_top_rois=args.num_top_rois,
+        sigma_segmentation=args.sigma_segmentation,
     )
     start_time_oeid2 = dt.now()
     (
         a2_list, b2_list, mi2_list, paired_emf2,
         signal_bboxes2, paired_bboxes2, example_signal_mean2, example_paired_mean2,
+        signal_mean_avg2, paired_mean_avg2, paired_bboxes_ref2,
+        signal_mean_list2, paired_mean_list2,
     ) = estimate_alpha_beta(
         oeid2, oeid1, oeid2_input_dir, oeid2_output_dir,
         grid_interval_fine=args.grid_interval_fine,
@@ -641,6 +693,7 @@ if __name__ == "__main__":
         dendrite_diameter_um=args.dendrite_diameter_um,
         max_diameter_um=args.max_diameter_um,
         num_top_rois=args.num_top_rois,
+        sigma_segmentation=args.sigma_segmentation,
     )
     (alpha1, beta1), (alpha2, beta2) = average_paired_coeffs(
         a1_list, b1_list, a2_list, b2_list
@@ -658,6 +711,9 @@ if __name__ == "__main__":
         coef_max=args.coef_max, recip_flag=args.recip_flag,
         signal_bboxes_list=signal_bboxes1, paired_bboxes_list=paired_bboxes1,
         example_signal_mean=example_signal_mean1, example_paired_mean=example_paired_mean1,
+        signal_mean_avg=signal_mean_avg1, paired_mean_avg=paired_mean_avg1,
+        paired_bboxes_ref=paired_bboxes_ref1,
+        signal_mean_list=signal_mean_list1, paired_mean_list=paired_mean_list1,
     )
     decrosstalk_fn2 = apply_decrosstalk_movie(
         oeid2, oeid1, oeid2_input_dir, oeid2_output_dir, alpha2, beta2,
@@ -668,6 +724,9 @@ if __name__ == "__main__":
         coef_max=args.coef_max, recip_flag=args.recip_flag,
         signal_bboxes_list=signal_bboxes2, paired_bboxes_list=paired_bboxes2,
         example_signal_mean=example_signal_mean2, example_paired_mean=example_paired_mean2,
+        signal_mean_avg=signal_mean_avg2, paired_mean_avg=paired_mean_avg2,
+        paired_bboxes_ref=paired_bboxes_ref2,
+        signal_mean_list=signal_mean_list2, paired_mean_list=paired_mean_list2,
     )
     # Episodic-mean-FOV of the corrected movies (QC / downstream)
     ppr.episodic_mean_fov(

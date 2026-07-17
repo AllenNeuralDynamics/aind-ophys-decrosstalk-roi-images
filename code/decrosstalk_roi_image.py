@@ -185,7 +185,11 @@ def decrosstalk_roi_image_from_episodic_mean_fov(
     max_diameter_um: float = 20,
     num_top_rois: int = 10,
     return_recon: float = False,
-) -> Tuple[np.array, list, list, list, list, list, np.array, np.array]:
+    sigma_segmentation: int = 30,
+) -> Tuple[
+    np.array, list, list, list, list, list, np.array, np.array,
+    np.array, np.array, list, list, list,
+]:
     """Get alpha and beta values for an experiment based on
     the mutual information of the ROI images from motion corrected episodic mean FOV images
 
@@ -226,6 +230,10 @@ def decrosstalk_roi_image_from_episodic_mean_fov(
         number of top-intensity ROIs to keep per plane, by default 10
     return_recon : bool, optional
         whether to return the reconstructed signal and paired images, by default True
+    sigma_segmentation : int, optional
+        Gaussian high-pass sigma passed to `get_signal_paired_top_masks` (and, in turn,
+        `segment_and_filter_with_relaxation`) for BOTH planes' once-per-plane reference
+        segmentation, by default 30
 
     Returns:
     -----------
@@ -245,6 +253,23 @@ def decrosstalk_roi_image_from_episodic_mean_fov(
         cropped signal-plane mean image from epoch 0 (used for the MI grid search)
     example_paired_mean : np.array
         cropped paired-plane mean image from epoch 0 (used for the MI grid search)
+    signal_mean_avg : np.array
+        full-session-averaged (across all epochs) cropped signal-plane reference image,
+        used for the once-per-plane segmentation (see above)
+    paired_mean_avg : np.array
+        full-session-averaged (across all epochs) cropped paired-plane (self-registered)
+        reference image, used for the once-per-plane segmentation (see above)
+    paired_bboxes_ref : list
+        paired-plane's own PRE-shift reference ROI bounding boxes (see ``_bbox_coords``),
+        i.e. ``_bbox_coords(get_bounding_box(paired_top_masks_ref))`` -- in the paired
+        plane's own self-registered frame (same frame as `paired_mean_avg`), unlike
+        `paired_bboxes_list` which is shifted per epoch into the `registered_to_pair` frame
+    signal_mean_list : list
+        list (one entry per epoch) of the cropped signal-plane mean images used for the MI
+        grid search, all epochs (not just epoch 0)
+    paired_mean_list : list
+        list (one entry per epoch) of the cropped paired-plane mean images used for the MI
+        grid search, all epochs (not just epoch 0)
     """
 
     signal_fn = (
@@ -308,6 +333,7 @@ def decrosstalk_roi_image_from_episodic_mean_fov(
         pix_size=pixel_size,
         num_top_rois=num_top_rois,
         exclude_edge_touching_bbox=True,
+        sigma_segmentation=sigma_segmentation,
     )
     paired_top_masks_ref, _ = get_signal_paired_top_masks(
         paired_self_mean_avg,
@@ -317,9 +343,16 @@ def decrosstalk_roi_image_from_episodic_mean_fov(
         pix_size=pixel_size,
         num_top_rois=num_top_rois,
         exclude_edge_touching_bbox=True,
+        sigma_segmentation=sigma_segmentation,
     )
     # Signal-plane boxes: reused for every epoch, never recomputed or shifted.
     signal_bb_masks_ref = get_bounding_box(signal_top_masks_ref, pix_size=pixel_size)
+    # Paired plane's own PRE-shift reference boxes (its own self-registered frame, same
+    # frame as paired_self_mean_avg) -- kept for the full-session-mean-FOV QC panel, which
+    # pairs paired_self_mean_avg with boxes drawn in ITS OWN frame rather than any epoch's
+    # shifted registered_to_pair frame.
+    paired_bb_masks_ref = get_bounding_box(paired_top_masks_ref, pix_size=pixel_size)
+    paired_bboxes_ref = _bbox_coords(paired_bb_masks_ref)
 
     # Motion-transform CSVs, loaded once, used to compute the per-epoch rigid-shift delta
     # that maps paired_top_masks_ref into that epoch's registered_to_pair frame.
@@ -368,6 +401,8 @@ def decrosstalk_roi_image_from_episodic_mean_fov(
     paired_bboxes_list = []
     example_signal_mean = None
     example_paired_mean = None
+    signal_mean_list = []
+    paired_mean_list = []
     for epoch_idx, start_frame in enumerate(start_frames):
         dy_R, dx_R = compute_mean_rigid_shift(
             oeid_motion_df, start_frame, num_frames_actual
@@ -420,6 +455,8 @@ def decrosstalk_roi_image_from_episodic_mean_fov(
         # those exact bb_masks were passed in and no re-segmentation happened.
         signal_bboxes_list.append(signal_bboxes)
         paired_bboxes_list.append(paired_bboxes)
+        signal_mean_list.append(signal_mean)
+        paired_mean_list.append(paired_mean)
         if epoch_idx == 0:
             example_signal_mean = signal_mean
             example_paired_mean = paired_mean
@@ -448,6 +485,11 @@ def decrosstalk_roi_image_from_episodic_mean_fov(
         paired_bboxes_list,
         example_signal_mean,
         example_paired_mean,
+        signal_mean_avg,
+        paired_self_mean_avg,
+        paired_bboxes_ref,
+        signal_mean_list,
+        paired_mean_list,
     )
 
 
@@ -639,9 +681,36 @@ COEF_MAX = 0.36     # fixed coefficient-value axis (grid max) -> figures compara
 RECIP_FLAG = 0.05   # reciprocity-gap flag line (above the observed max ~0.043; tunable)
 
 
+def _fill_sparse_landscape_grid(grid: np.array, grid_interval_fine: float, grid_interval_coarse: float) -> np.array:
+    """Block-fill the sparse coarse-to-fine MI landscape grid for display: `grid` (from
+    coarse_to_fine_grid_search) is evaluated at every `grid_interval_fine` step only within
+    a small window around the minimum, and at every `grid_interval_coarse` step elsewhere
+    (NaN in between) -- rendered directly, the coarse region looks like scattered points
+    with gaps rather than a filled landscape. This fills each unevaluated cell with its
+    nearest coarse-grid neighbor's value (nearest-neighbor block fill, using the coarse
+    grid's own block structure: index (i,j) maps to coarse block
+    (i // ratio * ratio, j // ratio * ratio)), leaving the already-dense fine-window region
+    untouched. Purely cosmetic (for rendering) -- does not change the underlying grid_vals
+    data written to qc-values.json.
+    """
+    ratio = max(1, int(round(grid_interval_coarse / grid_interval_fine)))
+    if ratio == 1:
+        return grid
+    filled = grid.copy()
+    n0, n1 = grid.shape
+    for i in range(n0):
+        ci = (i // ratio) * ratio
+        for j in range(n1):
+            if np.isnan(filled[i, j]):
+                cj = (j // ratio) * ratio
+                if ci < n0 and cj < n1 and not np.isnan(grid[ci, cj]):
+                    filled[i, j] = grid[ci, cj]
+    return filled
+
+
 def render_landscape_page(mean_norm_mi_list, alpha_list, beta_list, grid_interval_fine=0.01,
-                          title="", applied=None, partner=None, coef_max=COEF_MAX,
-                          recip_flag=RECIP_FLAG, save=None):
+                          grid_interval_coarse=0.04, title="", applied=None, partner=None,
+                          coef_max=COEF_MAX, recip_flag=RECIP_FLAG, save=None):
     """One-page landscape QC figure: per-epoch MI landscapes + coefficient stability + pair
     symmetry (reciprocity).
 
@@ -656,6 +725,13 @@ def render_landscape_page(mean_norm_mi_list, alpha_list, beta_list, grid_interva
     (alpha_q_list, beta_q_list) of the partner plane; when given, adds the pair-symmetry row.
     Coefficient-value axes are square and fixed to [0, coef_max]. Kept identical to
     decrosstalk_qc.plots.render_landscape_page (ASCII labels for headless-font safety).
+
+    `grid_interval_coarse` (the coarse-pass step used by ``coarse_to_fine_grid_search``) is
+    used purely for DISPLAY: the per-epoch landscape grids are sparse (NaN outside the fine
+    window around the minimum, evaluated only every `grid_interval_coarse` step elsewhere),
+    which renders as scattered points rather than a filled heatmap. Each panel's background
+    is block-filled (see `_fill_sparse_landscape_grid`) before plotting; the minimum marker
+    still uses the original (unfilled) grid.
     """
     import math
     if save is not None:
@@ -691,7 +767,8 @@ def render_landscape_page(mean_norm_mi_list, alpha_list, beta_list, grid_interva
     for e in range(2 * ncols):
         ax = axl[e // ncols][e % ncols]
         if e < n:
-            im = ax.imshow(grid[e].T, origin="lower", extent=[0, gm, 0, gm], vmin=vmin,
+            filled = _fill_sparse_landscape_grid(grid[e], grid_interval_fine, grid_interval_coarse)
+            im = ax.imshow(filled.T, origin="lower", extent=[0, gm, 0, gm], vmin=vmin,
                            vmax=vmax, cmap="viridis", aspect="auto")
             if np.isfinite(grid[e]).any():
                 ai, bi = np.unravel_index(int(np.nanargmin(grid[e])), grid[e].shape)
@@ -784,7 +861,7 @@ def render_roi_bbox_page(signal_mean, paired_mean, signal_bboxes, paired_bboxes,
         for boxes, color, label in [(signal_bboxes, "red", "signal ROI boxes"),
                                     (paired_bboxes, "cyan", "paired ROI boxes")]:
             for bi, b in enumerate(boxes):
-                x, y = b["top_left"]
+                x, y = b["left"], b["top"]
                 rect = Rectangle((x, y), b["width"], b["height"], linewidth=1,
                                  edgecolor=color, facecolor="none",
                                  label=label if bi == 0 else None)
@@ -796,6 +873,66 @@ def render_roi_bbox_page(signal_mean, paired_mean, signal_bboxes, paired_bboxes,
               bbox_to_anchor=(0.5, 0.0))
     fig.suptitle(title, fontsize=11)
     fig.tight_layout(rect=(0, 0.06, 1, 1))
+    if save is not None:
+        fig.savefig(save, dpi=100, bbox_inches="tight")
+        plt.close(fig)
+        return save
+    return fig
+
+
+def render_roi_bbox_per_epoch_page(signal_mean_list, paired_mean_list, signal_bboxes_list,
+                                    paired_bboxes_list, title="", save=None):
+    """Grid QC figure: one column per epoch, two rows (current plane on top, paired plane
+    on the bottom). Each panel shows BOTH box sets (current-plane boxes and paired-plane
+    boxes) overlaid on that panel's own image, same convention as render_roi_bbox_page,
+    just repeated across every epoch instead of one. Lets you see the (fixed) current-
+    plane boxes alongside the (per-epoch-shifted) paired-plane boxes side by side, epoch by
+    epoch.
+
+    A single 1st/99th-percentile intensity scale is computed across ALL images in both
+    `signal_mean_list` and `paired_mean_list` (not independently per panel), so panels are
+    fairly comparable across epochs and planes -- independent per-panel scaling would be
+    misleading here (each panel would auto-contrast to its own noise floor).
+    """
+    import matplotlib
+    if save is not None:
+        matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+    from matplotlib.patches import Rectangle
+
+    n_epochs = len(signal_mean_list)
+    all_imgs = np.concatenate(
+        [np.asarray(img).ravel() for img in list(signal_mean_list) + list(paired_mean_list)]
+    )
+    lo, hi = np.percentile(all_imgs, [1, 99])
+
+    fig, axes = plt.subplots(2, n_epochs, figsize=(2.2 * n_epochs, 5.2), squeeze=False)
+    row_specs = [(signal_mean_list, "signal"), (paired_mean_list, "paired")]
+    for row, (mean_list, row_label) in enumerate(row_specs):
+        for i in range(n_epochs):
+            ax = axes[row][i]
+            ax.imshow(mean_list[i], cmap="gray", vmin=lo, vmax=hi, origin="upper", aspect="equal")
+            for boxes, color, label in [(signal_bboxes_list[i], "red", "signal ROI boxes"),
+                                        (paired_bboxes_list[i], "cyan", "paired ROI boxes")]:
+                for bi, b in enumerate(boxes):
+                    x, y = b["left"], b["top"]
+                    rect = Rectangle((x, y), b["width"], b["height"], linewidth=1,
+                                     edgecolor=color, facecolor="none",
+                                     label=label if (bi == 0 and i == 0 and row == 0) else None)
+                    ax.add_patch(rect)
+            if row == 0:
+                ax.set_title(f"epoch {i}", fontsize=8)
+            if i == 0:
+                ax.axis("on")
+                ax.set_xticks([]); ax.set_yticks([])
+                ax.set_ylabel(row_label, fontsize=9)
+            else:
+                ax.axis("off")
+    handles, labels = axes[0][0].get_legend_handles_labels()
+    fig.legend(handles, labels, fontsize=8, loc="lower center", ncol=2,
+              bbox_to_anchor=(0.5, 0.0))
+    fig.suptitle(title, fontsize=11)
+    fig.tight_layout(rect=(0, 0.05, 1, 1))
     if save is not None:
         fig.savefig(save, dpi=100, bbox_inches="tight")
         plt.close(fig)
@@ -821,20 +958,49 @@ def save_qc_values(mean_norm_mi_list, alpha_list, beta_list, applied, oeid=None,
     """Save the exact values needed to reproduce this plane's QC figure
     (:func:`render_landscape_page`) to a JSON file -- the plot's data, without the plot.
 
-    Parameters mirror ``render_landscape_page``; nothing here is derived/recomputed, it is
-    the same data passed to that function. NaN cells in ``mean_norm_mi_list`` (the sparse
-    coarse-to-fine grid's unevaluated points) are written as ``null``. ``grid_interval_fine``
-    is the resolution of the stored grid itself (needed to reshape/plot it);
-    ``grid_interval_coarse`` is recorded too even though the figure doesn't need it, purely
-    so the sparse coarse+fine structure (why most cells are null) is self-documenting from
-    the JSON alone, rather than only inferable from the NaN pattern.
+    Parameters mirror ``render_landscape_page``, EXCEPT for how ``mean_norm_mi_list`` itself
+    is stored: the in-memory arrays passed in are the sparse (n*n) dense grids (NaN at
+    unevaluated cells) that ``render_landscape_page``/``landscape_quality`` use directly,
+    but writing that dense form to JSON would mean ~85% ``null`` padding (e.g. 1369 cells
+    per epoch for only ~200-235 real evaluations, see below). Since
+    ``landscape_alpha_coords``/``landscape_beta_coords`` (below) already give the exact
+    (alpha, beta) for every evaluated point, the ``null`` padding carries no information --
+    so the JSON's ``mean_norm_mi_list`` is instead the COMPACT list of only the evaluated
+    values (no ``null``\\ s), in the same order as the coordinate lists (see below), for
+    each epoch. ``grid_interval_fine``/``grid_interval_coarse`` are recorded so the sparse
+    coarse+fine structure that produced this compact list is self-documenting from the JSON
+    alone.
 
     signal_bboxes_list/paired_bboxes_list (if given): per-epoch list of ROI box dicts
-    {top_left:[x,y], width, height} in the cropped-image pixel frame (same crop for every
+    {top, left, width, height} in the cropped-image pixel frame (same crop for every
     epoch of this oeid) -- lets the boxes be redrawn without re-running segmentation.
+
+    ``landscape_alpha_coords``/``landscape_beta_coords`` are always added: PER-EPOCH lists
+    of the actual evaluated (alpha, beta) coordinates, one per entry of that epoch's
+    (now-compact) ``mean_norm_mi_list`` entry -- ``landscape_alpha_coords[e][k]``/
+    ``landscape_beta_coords[e][k]``/``mean_norm_mi_list[e][k]`` is a matched (alpha, beta,
+    mi) triplet for every k. The count varies by epoch, NOT a fixed-length dense-grid axis
+    -- the coarse-to-fine search's evaluated-point count varies (the fine window can
+    overlap the coarse grid at up to 3x3=9 shared points since the fine-window center is
+    always a coarse-grid multiple; ``np.arange``'s floating-point boundary behavior can
+    give a fine axis 11 or 12 points instead of a fixed 11; and the fine window clips near
+    the [0, coef_max] edges) -- empirically 191-235 evaluated cells out of 1369 across real
+    epochs of one session. The full sparse (n, n) grid (with ``nan`` at every other cell,
+    as ``render_landscape_page``/``landscape_quality`` expect) can always be reconstructed
+    from these three parallel lists plus ``grid_interval_fine`` if needed:
+    ``grid[round(a/grid_interval_fine), round(b/grid_interval_fine)] = v`` for each
+    ``(a, b, v)`` triplet.
 
     Returns the dict written (or returned, if ``save`` is None).
     """
+    n = int(round(coef_max / grid_interval_fine)) + 1
+    landscape_alpha_coords, landscape_beta_coords, landscape_mi_values = [], [], []
+    for g in mean_norm_mi_list:
+        epoch_grid = np.asarray(g, dtype=float).reshape(n, n)
+        rows, cols = np.where(~np.isnan(epoch_grid))
+        landscape_alpha_coords.append((rows * grid_interval_fine).tolist())
+        landscape_beta_coords.append((cols * grid_interval_fine).tolist())
+        landscape_mi_values.append(epoch_grid[rows, cols].tolist())
     qc = {
         "oeid": oeid,
         "paired_oeid": paired_oeid,
@@ -846,7 +1012,9 @@ def save_qc_values(mean_norm_mi_list, alpha_list, beta_list, applied, oeid=None,
         "applied_beta": float(applied[1]),
         "alpha_list": _json_sanitize(alpha_list),
         "beta_list": _json_sanitize(beta_list),
-        "mean_norm_mi_list": _json_sanitize(mean_norm_mi_list),
+        "mean_norm_mi_list": landscape_mi_values,
+        "landscape_alpha_coords": landscape_alpha_coords,
+        "landscape_beta_coords": landscape_beta_coords,
     }
     if partner is not None:
         qc["partner_alpha_list"] = _json_sanitize(partner[0])
@@ -1104,6 +1272,7 @@ def get_signal_paired_top_masks(
     num_top_rois: int = 10,
     relaxation_factors: tuple = (1.0, 0.7, 0.5),
     exclude_edge_touching_bbox: bool = False,
+    sigma_segmentation: int = 30,
 ) -> Tuple[np.array, np.array]:
     """Get top masks of 2 paired mean images.
 
@@ -1155,6 +1324,9 @@ def get_signal_paired_top_masks(
         selection (see `segment_and_filter_with_relaxation`) -- filtering this only after
         top-N selection would silently under-fill num_top_rois, since a selected box
         dropped late can't be backfilled by the next-best candidate. By default False.
+    sigma_segmentation : int, optional
+        Gaussian high-pass sigma passed to `segment_and_filter_with_relaxation` for BOTH
+        planes, by default 30
 
     Returns:
     -----------
@@ -1172,6 +1344,7 @@ def get_signal_paired_top_masks(
         dendrite_diameter_pix=dendrite_diameter_px,
         max_diameter_pix=max_diameter_px,
         target_count=num_top_rois,
+        sigma_segmentation=sigma_segmentation,
         relaxation_factors=relaxation_factors,
         exclude_edge_touching_bbox=exclude_edge_touching_bbox,
         pix_size=pix_size,
@@ -1181,6 +1354,7 @@ def get_signal_paired_top_masks(
         dendrite_diameter_pix=dendrite_diameter_px,
         max_diameter_pix=max_diameter_px,
         target_count=num_top_rois,
+        sigma_segmentation=sigma_segmentation,
         relaxation_factors=relaxation_factors,
         exclude_edge_touching_bbox=exclude_edge_touching_bbox,
         pix_size=pix_size,
@@ -1467,17 +1641,18 @@ def get_bounding_box(
 
 
 def _bbox_coords(bb_masks):
-    """Extract (top_left, width, height) for each box in a get_bounding_box() output.
-    Returns a list of dicts: {"top_left": [x, y], "width": w, "height": h} (x=column,
-    y=row, 0-indexed from the image's top-left corner; matches the box's exact nonzero
-    rectangular extent -- get_bounding_box fills each box as a solid rectangle)."""
+    """Extract (top, left, width, height) for each box in a get_bounding_box() output.
+    Returns a list of dicts: {"top": y0, "left": x0, "width": w, "height": h} (CSS
+    box-model naming: top=row/y, left=column/x, 0-indexed from the image's top-left
+    corner; matches the box's exact nonzero rectangular extent -- get_bounding_box fills
+    each box as a solid rectangle)."""
     boxes = []
     for i in range(bb_masks.shape[0]):
         y, x = np.where(bb_masks[i] > 0)
         if len(y) == 0:
             continue
         y0, y1, x0, x1 = int(y.min()), int(y.max()), int(x.min()), int(x.max())
-        boxes.append({"top_left": [x0, y0], "width": x1 - x0 + 1, "height": y1 - y0 + 1})
+        boxes.append({"top": y0, "left": x0, "width": x1 - x0 + 1, "height": y1 - y0 + 1})
     return boxes
 
 
