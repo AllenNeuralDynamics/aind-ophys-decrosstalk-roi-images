@@ -376,7 +376,7 @@ def apply_decrosstalk_movie(
             grid_interval_fine=grid_interval_fine, grid_interval_coarse=grid_interval_coarse,
             coef_max=coef_max, recip_flag=recip_flag,
             signal_bboxes_list=signal_bboxes_list, paired_bboxes_list=paired_bboxes_list,
-            save=str(output_dir / "qc-values.json"),
+            save=str(output_dir / f"{oeid}_qc-values.json"),
         )
     except Exception as exc:  # noqa: BLE001
         logging.warning(f"qc-values.json failed for {oeid}: {exc}")
