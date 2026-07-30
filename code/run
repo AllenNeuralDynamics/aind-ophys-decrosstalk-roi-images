@@ -1,24 +1,55 @@
 #!/usr/bin/env bash
-set -ex
+set -e
 
-# This is the master script for the capsule. When you click "Reproducible Run", the code in this file will execute.
-ls ../data
+# Nextflow interleaves concurrent tasks into one stream, so tag every line.
+TAG="[aind-ophys-decrosstalk-roi-images@${HOSTNAME:-nohost}]"
+trap 'echo "${TAG} run end: exit $?"' EXIT
 
-# Check if a file matching the pair*.txt pattern exists;
-# if it does, create the corresponding directory and create links to the 2 target locations listed in the file
-if ls /data/pair*.txt 1> /dev/null 2>&1; then
-    file=$(ls /data/pair*.txt)
-    echo "File found: $file"
-    pair_dir=${file%%.txt}
-    log_file="$pair_dir/link_errors.log"
-    mkdir $pair_dir
-    ls $pair_dir
-    while read -r line; do
-	ln -s $line $pair_dir
-    done < "$file"
-else
-    echo "No files found with the pattern pair*.txt"
+echo "${TAG} inputs: $(ls ../data | tr '\n' ' ')"
+
+# Cellpose weights ship next to this script. main.nf stages ONLY the capsule's
+# code/ directory, so a model kept at the repo root is absent in pipeline runs
+# and cellpose would try to download it -- which the library deliberately turns
+# into a hard error. Point cellpose here (overriding the image's
+# CELLPOSE_LOCAL_MODELS_PATH) so both capsule and pipeline runs resolve it, and
+# fail now rather than after the expensive paired-plane registration.
+CODE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+export CELLPOSE_LOCAL_MODELS_PATH="${CODE_DIR}"
+if [ ! -f "${CODE_DIR}/cytotorch_0" ]; then
+    echo "${TAG} ERROR: cellpose model cytotorch_0 missing from ${CODE_DIR}." \
+         "A non-default --cellpose_model_type needs its weights committed too."
+    exit 1
 fi
-ls /data/pair*/
-ls /data/pair*/*
-python -u run_capsule.py "$@"
+echo "${TAG} CELLPOSE_LOCAL_MODELS_PATH=${CELLPOSE_LOCAL_MODELS_PATH}"
+
+# The upstream pair-split capsule stages one pair*.txt naming the two plane
+# directories of this pair. Materialise it as a pair*/ directory of symlinks,
+# which is the layout the library's pair discovery walks.
+shopt -s nullglob
+pair_files=(/data/pair*.txt)
+shopt -u nullglob
+if [ "${#pair_files[@]}" -eq 1 ]; then
+    pair_file="${pair_files[0]}"
+    pair_dir="${pair_file%.txt}"
+    echo "${TAG} pair file: ${pair_file} -> ${pair_dir}/"
+    mkdir -p "${pair_dir}"
+    while read -r plane_path || [ -n "${plane_path}" ]; do
+        [ -n "${plane_path}" ] || continue
+        ln -sf "${plane_path}" "${pair_dir}/$(basename "${plane_path}")"
+    done < "${pair_file}"
+    echo "${TAG} pair planes: $(ls "${pair_dir}" | tr '\n' ' ')"
+elif [ "${#pair_files[@]}" -eq 0 ]; then
+    echo "${TAG} no /data/pair*.txt; expecting a pre-staged pair*/ directory"
+else
+    echo "${TAG} ERROR: expected one /data/pair*.txt, found" \
+         "${#pair_files[@]}: ${pair_files[*]}"
+    exit 1
+fi
+
+# Plain text, so tag every line.
+pip list 2>&1 | sed "s|^|${TAG} pip |"
+
+echo "${TAG} run begin: python -u run_capsule.py $*"
+# Unprefixed: log_schema emits JSON records that must stay parseable, and each
+# already carries process_name / acquisition_name.
+python -u run_capsule.py "$@" 2>&1

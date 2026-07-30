@@ -1,0 +1,213 @@
+{
+	"version": 1,
+	"named_parameters": true,
+	"parameters": [
+		{
+			"id": "vzuxha79KywfGzNx",
+			"name": "input_dir",
+			"param_name": "input_dir",
+			"description": "Directory containing the paired plane input data.",
+			"help_text": "Directory containing the paired plane input data.",
+			"type": "text",
+			"value_type": "string",
+			"default_value": "../data"
+		},
+		{
+			"id": "p2IAT8t2n5WlUH24",
+			"name": "output_dir",
+			"param_name": "output_dir",
+			"description": "Directory where output files will be saved.",
+			"help_text": "Directory where output files will be saved.",
+			"type": "text",
+			"value_type": "string",
+			"default_value": "../results"
+		},
+		{
+			"id": "4Jw1rU0Tn5aZ1IMa",
+			"name": "tmp_dir",
+			"param_name": "tmp_dir",
+			"description": "Directory for the large intermediate paired-registered movies, which are deleted once decrosstalk finishes.",
+			"help_text": "Directory for the large intermediate paired-registered movies, which are deleted once decrosstalk finishes.",
+			"type": "text",
+			"value_type": "string",
+			"default_value": "../scratch"
+		},
+		{
+			"id": "XtmCzrv4pkvU2mX8",
+			"name": "debug",
+			"param_name": "debug",
+			"description": "Truncate each movie to debug_duration_s seconds before processing, for a fast end-to-end smoke test.",
+			"help_text": "Truncate each movie to debug_duration_s seconds before processing, for a fast end-to-end smoke test.",
+			"type": "text",
+			"value_type": "integer",
+			"default_value": "0"
+		},
+		{
+			"id": "NQh1qOk6H67znDWt",
+			"name": "debug_duration_s",
+			"param_name": "debug_duration_s",
+			"description": "Movie duration [s] retained when debug is enabled. Converted to a frame count using the acquisition frame rate.",
+			"help_text": "Movie duration [s] retained when debug is enabled. Converted to a frame count using the acquisition frame rate.",
+			"type": "text",
+			"value_type": "number",
+			"default_value": "360.0"
+		},
+		{
+			"id": "HKX0H0PSoH7uNB9b",
+			"name": "frame_rate",
+			"param_name": "frame_rate",
+			"description": "Frame rate [Hz] fallback used only when it cannot be read from acquisition/session/platform metadata. Only needed for debug truncation.",
+			"help_text": "Frame rate [Hz] fallback used only when it cannot be read from acquisition/session/platform metadata. Only needed for debug truncation.",
+			"type": "text",
+			"value_type": "number"
+		},
+		{
+			"id": "4QoieTSdg4wXa9Rp",
+			"name": "num_frames",
+			"param_name": "num_frames",
+			"description": "Number of frames averaged per epoch for the episodic mean FOV. Overridden by debug_num_frames when debug is enabled.",
+			"help_text": "Number of frames averaged per epoch for the episodic mean FOV. Overridden by debug_num_frames when debug is enabled.",
+			"type": "text",
+			"value_type": "integer",
+			"default_value": "1000"
+		},
+		{
+			"id": "oUwmMmoNWiOVs6Ty",
+			"name": "debug_num_frames",
+			"param_name": "debug_num_frames",
+			"description": "Frames averaged per epoch for the episodic mean FOV when debug is enabled.",
+			"help_text": "Frames averaged per epoch for the episodic mean FOV when debug is enabled.",
+			"type": "text",
+			"value_type": "integer",
+			"default_value": "300"
+		},
+		{
+			"id": "2886hkyFvFFPB9pC",
+			"name": "max_num_epochs",
+			"param_name": "max_num_epochs",
+			"description": "Maximum number of epochs in the episodic mean FOV.",
+			"help_text": "Maximum number of epochs in the episodic mean FOV.",
+			"type": "text",
+			"value_type": "integer",
+			"default_value": "10"
+		},
+		{
+			"id": "SHS6Qpb8gztXd3wh",
+			"name": "nonrigid",
+			"param_name": "nonrigid",
+			"description": "Override for whether motion correction was non-rigid. Leave unset to read it from the upstream motion-correction metadata.",
+			"help_text": "Override for whether motion correction was non-rigid. Leave unset to read it from the upstream motion-correction metadata.",
+			"type": "text",
+			"value_type": "integer"
+		},
+		{
+			"id": "eSY62IikTaXpxNxR",
+			"name": "block_size",
+			"param_name": "block_size",
+			"description": "Override for the suite2p non-rigid block size, e.g. '[128, 128]'. Leave unset to read it from the upstream motion-correction metadata.",
+			"help_text": "Override for the suite2p non-rigid block size, e.g. '[128, 128]'. Leave unset to read it from the upstream motion-correction metadata.",
+			"type": "text",
+			"value_type": "string"
+		},
+		{
+			"id": "kYvq8bjXPc1qCEJW",
+			"name": "chunk_size",
+			"param_name": "chunk_size",
+			"description": "Number of frames unmixed per chunk when writing the decrosstalk movie. Bounds peak memory use.",
+			"help_text": "Number of frames unmixed per chunk when writing the decrosstalk movie. Bounds peak memory use.",
+			"type": "text",
+			"value_type": "integer",
+			"default_value": "5000"
+		},
+		{
+			"id": "DxWK3PWpPtatiPwY",
+			"name": "pixel_size",
+			"param_name": "pixel_size",
+			"description": "Imaging plane pixel size [um].",
+			"help_text": "Imaging plane pixel size [um].",
+			"type": "text",
+			"value_type": "number",
+			"default_value": "0.78"
+		},
+		{
+			"id": "pxmMoGS5jbU9yfcl",
+			"name": "grid_interval",
+			"param_name": "grid_interval",
+			"description": "Step of the alpha/beta grid search.",
+			"help_text": "Step of the alpha/beta grid search.",
+			"type": "text",
+			"value_type": "number",
+			"default_value": "0.01"
+		},
+		{
+			"id": "ncHkJwROx8uuUBye",
+			"name": "max_grid_val",
+			"param_name": "max_grid_val",
+			"description": "Maximum alpha/beta value searched.",
+			"help_text": "Maximum alpha/beta value searched.",
+			"type": "text",
+			"value_type": "number",
+			"default_value": "0.3"
+		},
+		{
+			"id": "ymLG7aewHk5O4r5o",
+			"name": "motion_buffer",
+			"param_name": "motion_buffer",
+			"description": "Pixels cropped from each edge beyond the motion-correction crop range, to exclude non-rigid edge artifacts.",
+			"help_text": "Pixels cropped from each edge beyond the motion-correction crop range, to exclude non-rigid edge artifacts.",
+			"type": "text",
+			"value_type": "integer",
+			"default_value": "5"
+		},
+		{
+			"id": "mDFPSr4V9Ag7ipVi",
+			"name": "dendrite_diameter_um",
+			"param_name": "dendrite_diameter_um",
+			"description": "Diameter [um] below which a detected mask is treated as dendrite and discarded.",
+			"help_text": "Diameter [um] below which a detected mask is treated as dendrite and discarded.",
+			"type": "text",
+			"value_type": "number",
+			"default_value": "10.0"
+		},
+		{
+			"id": "qqVpeP59dig3CjVO",
+			"name": "num_top_rois",
+			"param_name": "num_top_rois",
+			"description": "Number of highest-intensity ROIs per plane retained for the mutual-information grid search.",
+			"help_text": "Number of highest-intensity ROIs per plane retained for the mutual-information grid search.",
+			"type": "text",
+			"value_type": "integer",
+			"default_value": "15"
+		},
+		{
+			"id": "LD1KSQ9qWTQa8AJX",
+			"name": "overlap_threshold",
+			"param_name": "overlap_threshold",
+			"description": "Intersection-over-union above which a signal/paired mask pair is treated as the same cell duplicated by crosstalk.",
+			"help_text": "Intersection-over-union above which a signal/paired mask pair is treated as the same cell duplicated by crosstalk.",
+			"type": "text",
+			"value_type": "number",
+			"default_value": "0.7"
+		},
+		{
+			"id": "IYzA4x3SzV7zOGFw",
+			"name": "cellpose_model_type",
+			"param_name": "cellpose_model_type",
+			"description": "Cellpose pretrained model used to segment the mean images. The model must be present locally (CELLPOSE_LOCAL_MODELS_PATH); network downloads are disabled.",
+			"help_text": "Cellpose pretrained model used to segment the mean images. The model must be present locally (CELLPOSE_LOCAL_MODELS_PATH); network downloads are disabled.",
+			"type": "text",
+			"value_type": "string",
+			"default_value": "cyto"
+		},
+		{
+			"id": "XwLP8Zb5RIcuqhBq",
+			"name": "verify",
+			"param_name": "verify",
+			"description": "Round-trip the emitted processing.json / quality_control.json through the core v2 schema objects after writing, so bad output fails in-capsule rather than downstream.",
+			"help_text": "Round-trip the emitted processing.json / quality_control.json through the core v2 schema objects after writing, so bad output fails in-capsule rather than downstream.",
+			"type": "text",
+			"value_type": "integer",
+			"default_value": "0"
+		}
+	]
+}
