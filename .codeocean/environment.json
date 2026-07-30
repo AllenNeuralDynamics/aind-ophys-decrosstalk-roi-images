@@ -1,0 +1,26 @@
+{
+	"version": 1,
+	"base_image": "codeocean/mambaforge3:23.1.0-4-python3.10.12-ubuntu22.04",
+	"options": {
+		"registry_host_arg": true,
+		"git_ask_pass": true,
+		"mount_secrets": true
+	},
+	"installers": {
+		"pip3": {
+			"packages": [
+				{
+					"name": "https://github.com/AllenNeuralDynamics/aind-ophys-decrosstalk-roi-images-library.git@53ee402c705f10cf637384f59cc2d64e8c7f8a6e#egg=aind-ophys-decrosstalk-roi-images-library"
+				}
+			],
+			"options": {},
+			"pre_install_options": {}
+		}
+	},
+	"env_variables": [
+		{
+			"name": "CELLPOSE_LOCAL_MODELS_PATH",
+			"value": "/root/capsule/code"
+		}
+	]
+}
