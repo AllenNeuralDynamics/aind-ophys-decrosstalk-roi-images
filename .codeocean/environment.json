@@ -10,7 +10,7 @@
 		"pip3": {
 			"packages": [
 				{
-					"name": "https://github.com/AllenNeuralDynamics/aind-ophys-decrosstalk-roi-images-library.git@53ee402c705f10cf637384f59cc2d64e8c7f8a6e#egg=aind-ophys-decrosstalk-roi-images-library"
+					"name": "git+https://github.com/AllenNeuralDynamics/aind-ophys-decrosstalk-roi-images-library.git@53ee402c705f10cf637384f59cc2d64e8c7f8a6e#egg=aind-ophys-decrosstalk-roi-images-library"
 				}
 			],
 			"options": {},
