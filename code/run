@@ -7,34 +7,13 @@ trap 'echo "${TAG} run end: exit $?"' EXIT
 
 echo "${TAG} inputs: $(ls ../data | tr '\n' ' ')"
 
-# Cellpose weights ship next to this script. main.nf stages ONLY the capsule's
-# code/ directory, so a model kept at the repo root is absent in pipeline runs
-# and cellpose would try to download it -- which the library deliberately turns
-# into a hard error. Point cellpose here (overriding the image's
-# CELLPOSE_LOCAL_MODELS_PATH) so both capsule and pipeline runs resolve it, and
-# fail now rather than after the expensive paired-plane registration.
-CODE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-export CELLPOSE_LOCAL_MODELS_PATH="${CODE_DIR}"
-
-# Cellpose(model_type="cyto") resolves TWO files, both via cache_model_path:
-# the segmentation net (cytotorch_0) and the size model that estimates cell
-# diameter (size_cytotorch_0.npy). Cellpose.__init__ builds the SizeModel
-# unconditionally, so the size model is required even though we never ask for
-# diameter estimation. Checking both here fails in a second; missing one used to
-# surface only after ~12 min of paired-plane registration.
-# net_avg defaults to False, so only index 0 is needed. Setting net_avg=True
-# would additionally require cytotorch_1/2/3.
-for model_file in cytotorch_0 size_cytotorch_0.npy; do
-    if [ ! -f "${CODE_DIR}/${model_file}" ]; then
-        echo "${TAG} ERROR: cellpose model file '${model_file}' missing from" \
-             "${CODE_DIR}. Network downloads are refused by design, so it must" \
-             "be committed under code/ (main.nf stages only code/). A" \
-             "non-default --cellpose_model_type needs its own two files."
-        exit 1
-    fi
-done
-echo "${TAG} CELLPOSE_LOCAL_MODELS_PATH=${CELLPOSE_LOCAL_MODELS_PATH}" \
-     "(cytotorch_0, size_cytotorch_0.npy present)"
+# Cellpose weights come from the read-only Code Ocean data asset mounted at
+# /data/cellpose_models, read in place and never copied. The capsule owns only
+# the Code Ocean path; the library records which bytes it loaded and refuses
+# any network download, so an absent mount fails at model construction.
+# CELLPOSE_MODEL_DIR is an explicit override for tests and non-CO callers.
+export CELLPOSE_LOCAL_MODELS_PATH="${CELLPOSE_MODEL_DIR:-/data/cellpose_models}"
+echo "${TAG} CELLPOSE_LOCAL_MODELS_PATH=${CELLPOSE_LOCAL_MODELS_PATH}"
 
 # The upstream pair-split capsule stages one pair*.txt naming the two plane
 # directories of this pair. Materialise it as a pair*/ directory of symlinks,
