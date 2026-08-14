@@ -9,8 +9,9 @@ echo "${TAG} inputs: $(ls ../data | tr '\n' ' ')"
 
 # Cellpose weights come from the read-only Code Ocean data asset mounted at
 # /data/cellpose_models, read in place and never copied. The capsule owns only
-# the Code Ocean path; the library records which bytes it loaded and refuses
-# any network download, so an absent mount fails at model construction.
+# the Code Ocean path; Cellpose itself checks this path first and falls back
+# to a network download when a file is absent, and the library records which
+# source (asset vs. network) actually supplied each file in code.parameters.
 # CELLPOSE_MODEL_DIR is an explicit override for tests and non-CO callers.
 export CELLPOSE_LOCAL_MODELS_PATH="${CELLPOSE_MODEL_DIR:-/data/cellpose_models}"
 echo "${TAG} CELLPOSE_LOCAL_MODELS_PATH=${CELLPOSE_LOCAL_MODELS_PATH}"
