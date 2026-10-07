@@ -193,21 +193,11 @@
 			"id": "IYzA4x3SzV7zOGFw",
 			"name": "cellpose_model_type",
 			"param_name": "cellpose_model_type",
-			"description": "Cellpose pretrained model used to segment the mean images. The model must be present locally (CELLPOSE_LOCAL_MODELS_PATH); network downloads are disabled.",
-			"help_text": "Cellpose pretrained model used to segment the mean images. The model must be present locally (CELLPOSE_LOCAL_MODELS_PATH); network downloads are disabled.",
+			"description": "Cellpose pretrained model used to segment the mean images. It is read from CELLPOSE_LOCAL_MODELS_PATH when present there, and downloaded otherwise.",
+			"help_text": "Cellpose pretrained model used to segment the mean images. It is read from CELLPOSE_LOCAL_MODELS_PATH when present there, and downloaded otherwise.",
 			"type": "text",
 			"value_type": "string",
 			"default_value": "cyto"
-		},
-		{
-			"id": "XwLP8Zb5RIcuqhBq",
-			"name": "verify",
-			"param_name": "verify",
-			"description": "Round-trip the emitted processing.json / quality_control.json through the core v2 schema objects after writing, so bad output fails in-capsule rather than downstream.",
-			"help_text": "Round-trip the emitted processing.json / quality_control.json through the core v2 schema objects after writing, so bad output fails in-capsule rather than downstream.",
-			"type": "text",
-			"value_type": "integer",
-			"default_value": "0"
 		}
 	]
 }
