@@ -7,35 +7,49 @@ trap 'echo "${TAG} run end: exit $?"' EXIT
 
 echo "${TAG} inputs: $(ls ../data | tr '\n' ' ')"
 
-# Cellpose weights come from the read-only Code Ocean data asset mounted at
-# /data/cellpose_models, read in place and never copied. The capsule owns only
-# the Code Ocean path; Cellpose itself checks this path first and falls back
-# to a network download when a file is absent, and the library records which
-# source (asset vs. network) actually supplied each file in code.parameters.
-# CELLPOSE_MODEL_DIR is an explicit override for tests and non-CO callers.
-export CELLPOSE_LOCAL_MODELS_PATH="${CELLPOSE_MODEL_DIR:-/data/cellpose_models}"
+# Cellpose weights come from the read-only data asset mounted at
+# ../data/cellpose_models, read in place and never copied. Cellpose itself
+# checks this path first and falls back to a network download when a file is
+# absent, and the library records which source (asset vs. network) actually
+# supplied each file in code.parameters. CELLPOSE_MODEL_DIR is an explicit
+# override for tests and other callers.
+export CELLPOSE_LOCAL_MODELS_PATH="${CELLPOSE_MODEL_DIR:-../data/cellpose_models}"
 echo "${TAG} CELLPOSE_LOCAL_MODELS_PATH=${CELLPOSE_LOCAL_MODELS_PATH}"
 
 # The upstream pair-split capsule stages one pair*.txt naming the two plane
 # directories of this pair. Materialise it as a pair*/ directory of symlinks,
-# which is the layout the library's pair discovery walks.
+# which is the layout the library's pair discovery walks. Each line is a plane
+# directory name under ../data; the legacy absolute form /data/<name>, written
+# by the published splitter, maps to the same directory.
 shopt -s nullglob
-pair_files=(/data/pair*.txt)
+pair_files=(../data/pair*.txt)
 shopt -u nullglob
 if [ "${#pair_files[@]}" -eq 1 ]; then
     pair_file="${pair_files[0]}"
     pair_dir="${pair_file%.txt}"
     echo "${TAG} pair file: ${pair_file} -> ${pair_dir}/"
     mkdir -p "${pair_dir}"
-    while read -r plane_path || [ -n "${plane_path}" ]; do
-        [ -n "${plane_path}" ] || continue
-        ln -sf "${plane_path}" "${pair_dir}/$(basename "${plane_path}")"
+    while read -r plane || [ -n "${plane}" ]; do
+        [ -n "${plane}" ] || continue
+        case "${plane}" in
+            /data/*) name="${plane#/data/}" ;;
+            /*)
+                echo "${TAG} ERROR: unsupported absolute plane path: ${plane}"
+                exit 1
+                ;;
+            *) name="${plane}" ;;
+        esac
+        if [ ! -d "../data/${name}" ]; then
+            echo "${TAG} ERROR: plane directory not found: ../data/${name}"
+            exit 1
+        fi
+        ln -sfn "../${name}" "${pair_dir}/${name}"
     done < "${pair_file}"
     echo "${TAG} pair planes: $(ls "${pair_dir}" | tr '\n' ' ')"
 elif [ "${#pair_files[@]}" -eq 0 ]; then
-    echo "${TAG} no /data/pair*.txt; expecting a pre-staged pair*/ directory"
+    echo "${TAG} no ../data/pair*.txt; expecting a pre-staged pair*/ directory"
 else
-    echo "${TAG} ERROR: expected one /data/pair*.txt, found" \
+    echo "${TAG} ERROR: expected one ../data/pair*.txt, found" \
          "${#pair_files[@]}: ${pair_files[*]}"
     exit 1
 fi
